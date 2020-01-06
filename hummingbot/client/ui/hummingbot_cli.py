@@ -63,7 +63,10 @@ class HummingbotCLI:
             output = str(e)
 
         self.log(output)
-        self.input_handler(self.input_field.text)
+        try:
+            self.input_handler(self.input_field.text)
+        except BaseException as e:
+            self.log(f"Unexpected error: {e}")
 
     def clear_input(self):
         self.pending_input = None
