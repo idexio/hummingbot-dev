@@ -19,7 +19,7 @@ if is_posix:
 
 def main():
     cpu_count = os.cpu_count() or 8
-    version = "20200105"
+    version = "20200105.2"
     packages = [
         "hummingbot",
         "hummingbot.client",
@@ -89,7 +89,6 @@ def main():
         "rlp",
         "toolz",
         "tzlocal",
-        "urllib3",
         "web3",
         "websockets",
         "aiohttp",
@@ -108,6 +107,7 @@ def main():
         "python-binance==0.6.9",
         "sqlalchemy",
         "ujson",
+        "urllib3",
         "yarl",
     ]
 
