@@ -93,6 +93,7 @@ def main():
         "hexbytes",
         "kafka-python",
         "lru-dict",
+        "numpy",
         "parsimonious",
         "pycryptodome",
         "requests",
