@@ -1,21 +1,11 @@
 #!/usr/bin/env python
 
-from setuptools import setup
+from Cython.Build import cythonize
+from numpy import get_include as get_np_include
 import os
+from setuptools import setup
 import subprocess
 import sys
-try:
-    from Cython.Build import cythonize
-except ImportError:
-    def cythonize(*args, **kwargs):
-        from Cython.Build import cythonize
-        return cythonize(*args, **kwargs)
-
-try:
-    from numpy import get_include as get_np_include
-except ImportError:
-    def get_np_include():
-        return ""
 
 is_posix = (os.name == "posix")
 
