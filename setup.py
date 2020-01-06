@@ -19,7 +19,7 @@ if is_posix:
 
 def main():
     cpu_count = os.cpu_count() or 8
-    version = "20200105.2"
+    version = "20200106"
     packages = [
         "hummingbot",
         "hummingbot.client",
@@ -68,7 +68,7 @@ def main():
             "templates/*TEMPLATE.yml"
         ],
     }
-    install_requires = [
+    setup_requires = [
         "aioconsole",
         "aiokafka",
         "attrdict",
@@ -96,7 +96,7 @@ def main():
         "attrs",
         "certifi",
         "chardet",
-        "cython==0.29.5",
+        "cython==0.29.14",
         "idna",
         "idna_ssl",
         "multidict",
@@ -138,7 +138,8 @@ def main():
           license="Proprietary",
           packages=packages,
           package_data=package_data,
-          install_requires=install_requires,
+          setup_requires=setup_requires,
+          install_requires=setup_requires,
           ext_modules=cythonize(["hummingbot/**/*.pyx"], **cython_kwargs),
           include_dirs=[
               np.get_include()
