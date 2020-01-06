@@ -1,11 +1,16 @@
 #!/usr/bin/env python
 
 from setuptools import setup
-from Cython.Build import cythonize
 import numpy as np
 import os
 import subprocess
 import sys
+try:
+    from Cython.Build import cythonize
+except ImportError:
+    def cythonize(*args, **kwargs):
+        from Cython.Build import cythonize
+        return cythonize(*args, **kwargs)
 
 is_posix = (os.name == "posix")
 
