@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 from setuptools import setup
-import numpy as np
 import os
 import subprocess
 import sys
@@ -11,6 +10,12 @@ except ImportError:
     def cythonize(*args, **kwargs):
         from Cython.Build import cythonize
         return cythonize(*args, **kwargs)
+
+try:
+    from numpy import get_include as get_np_include
+except ImportError:
+    def get_np_include():
+        return ""
 
 is_posix = (os.name == "posix")
 
@@ -147,7 +152,7 @@ def main():
           install_requires=setup_requires,
           ext_modules=cythonize(["hummingbot/**/*.pyx"], **cython_kwargs),
           include_dirs=[
-              np.get_include()
+              get_np_include()
           ],
           scripts=[
               "bin/hummingbot.py",
