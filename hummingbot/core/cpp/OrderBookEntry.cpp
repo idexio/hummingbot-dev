@@ -45,11 +45,16 @@ void truncateOverlapEntriesDex(std::set<OrderBookEntry> &bidBook, std::set<Order
         const OrderBookEntry& topAsk = *askIterator;
         if (topBid.price >= topAsk.price) {
             if (topBid.amount*topBid.price > topAsk.amount*topAsk.price) {
-                askBook.erase(askIterator++);
+                askBook.erase(askIterator);
+                if (askIterator != askBook.end()) {
+                    askIterator++;
+                }
             } else {
                 std::set<OrderBookEntry>::iterator eraseIterator = (std::next(bidIterator)).base();
-                bidIterator++;
                 bidBook.erase(eraseIterator);
+                if (bidIterator != bidBook.rend()) {
+                    bidIterator++;
+                }
             }
         } else {
             break;
