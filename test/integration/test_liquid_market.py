@@ -25,7 +25,6 @@ from hummingbot.core.event.events import (
     BuyOrderCompletedEvent,
     BuyOrderCreatedEvent,
     MarketEvent,
-    MarketWithdrawAssetEvent,
     OrderCancelledEvent,
     OrderFilledEvent,
     OrderType,
@@ -50,7 +49,6 @@ from hummingbot.model.sql_connection_manager import (
     SQLConnectionType
 )
 from hummingbot.model.trade_fill import TradeFill
-from hummingbot.wallet.ethereum.mock_wallet import MockWallet
 from hummingbot.client.config.fee_overrides_config_map import fee_overrides_config_map
 from test.integration.humming_web_app import HummingWebApp
 from test.integration.assets.mock_data.fixture_liquid import FixtureLiquid
@@ -339,31 +337,30 @@ class LiquidMarketUnitTest(unittest.TestCase):
         self.assertTrue("currency_type" in deposit_info.extras.get('extras'))
         self.assertEqual("ETH", deposit_info.extras.get('extras').get('currency'))
 
-    @unittest.skipUnless(any("test_withdraw" in arg for arg in sys.argv), "Withdraw test requires manual action.")
-    def test_withdraw(self):
-        # CEL_ABI contract file can be found in
-        # https://etherscan.io/address/0xe41d2489571d322189246dafa5ebde1f4699f498#code
-        with open(realpath(join(__file__, "../../../data/CELABI.json"))) as fd:
-            zrx_abi: str = fd.read()
+    def test_cancel_order(self):
+        trading_pair = "CEL-ETH"
+        bid_price: Decimal = self.market.get_price(trading_pair, True)
+        amount: Decimal = 1
+        quantized_amount: Decimal = self.market.quantize_order_amount(trading_pair, amount)
 
-        local_wallet: MockWallet = MockWallet(conf.web3_test_private_key_a,
-                                              conf.test_web3_provider_list[0],
-                                              {"0xE41d2489571d322189246DaFA5ebDe1F4699F498": zrx_abi},
-                                              chain_id=1)
+        # Intentionally setting invalid price to prevent getting filled
+        quantize_bid_price: Decimal = self.market.quantize_order_price(trading_pair, bid_price * Decimal("0.7"))
 
-        # Ensure the market account has enough balance for withdraw testing.
-        self.assertGreaterEqual(self.market.get_balance("CEL"), Decimal('10'))
-
-        # Withdraw CEL from Liquid to test wallet.
-        self.market.withdraw(local_wallet.address, "CEL", Decimal('10'))
-        [withdraw_asset_event] = self.run_parallel(
-            self.market_logger.wait_for(MarketWithdrawAssetEvent)
-        )
-        withdraw_asset_event: MarketWithdrawAssetEvent = withdraw_asset_event
-        self.assertEqual(local_wallet.address, withdraw_asset_event.to_address)
-        self.assertEqual("CEL", withdraw_asset_event.asset_name)
-        self.assertEqual(Decimal('10'), withdraw_asset_event.amount)
-        self.assertGreater(withdraw_asset_event.fee_amount, Decimal(0))
+        order_id, buy_exchange_id = self.place_order(True, trading_pair, quantized_amount, OrderType.LIMIT,
+                                                     quantize_bid_price,
+                                                     10001, FixtureLiquid.ORDER_BUY_NOT_FILLED,
+                                                     FixtureLiquid.ORDERS_GET_AFTER_BUY)
+        [order_created_event] = self.run_parallel(self.market_logger.wait_for(BuyOrderCreatedEvent))
+        order_created_event: BuyOrderCreatedEvent = order_created_event
+        self.assertEqual(order_id, order_created_event.order_id)
+        if API_MOCK_ENABLED:
+            order_cancel_resp = FixtureLiquid.ORDER_BUY_CANCEL
+            self.web_app.update_response("put", API_HOST, f"/orders/{str(buy_exchange_id)}/cancel",
+                                         order_cancel_resp)
+        self.market.cancel(trading_pair, order_id)
+        [order_cancelled_event] = self.run_parallel(self.market_logger.wait_for(OrderCancelledEvent))
+        order_cancelled_event: OrderCancelledEvent = order_cancelled_event
+        self.assertEqual(order_cancelled_event.order_id, order_id)
 
     def test_cancel_all(self):
         trading_pair = "CEL-ETH"

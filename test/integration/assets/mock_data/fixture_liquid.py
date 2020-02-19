@@ -559,19 +559,20 @@ class FixtureLiquid:
             "address": "1F25zWAQ1BAAmppNxLV3KtK6aTNhxNg5Hg"
         }
     ]
+
     ORDERS_GET = {
         "models": [
-                {"id": 2017991459, "order_type": "market", "quantity": "1.0", "disc_quantity": "0.0",
-                 "iceberg_total_quantity": "0.0", "side": "buy", "filled_quantity": "1.0", "price": "0.00079",
-                 "created_at": 1579499313, "updated_at": 1579499313, "status": "filled", "leverage_level": 1,
-                 "source_exchange": None, "product_id": 500, "margin_type": None, "take_profit": None,
-                 "stop_loss": None, "trading_type": "spot", "product_code": "CASH", "funding_currency": "ETH",
-                 "crypto_account_id": None, "currency_pair_code": "CELETH", "average_price": "0.00079",
-                 "target": "spot", "order_fee": "0.00000079", "source_action": "manual", "unwound_trade_id": None,
-                 "trade_id": None, "client_order_id": "buy-CEL-ETH-1579499312988332", "settings": None,
-                 "trailing_stop_type": None, "trailing_stop_value": None, "executions": [
-                    {"id": 253095921, "quantity": "1.0", "price": "0.00079", "taker_side": "buy",
-                     "created_at": 1579499313, "my_side": "buy"}], "stop_triggered_time": None}
+            {"id": 2017991459, "order_type": "market", "quantity": "1.0", "disc_quantity": "0.0",
+             "iceberg_total_quantity": "0.0", "side": "buy", "filled_quantity": "1.0", "price": "0.00079",
+             "created_at": 1579499313, "updated_at": 1579499313, "status": "filled", "leverage_level": 1,
+             "source_exchange": None, "product_id": 500, "margin_type": None, "take_profit": None,
+             "stop_loss": None, "trading_type": "spot", "product_code": "CASH", "funding_currency": "ETH",
+             "crypto_account_id": None, "currency_pair_code": "CELETH", "average_price": "0.00079",
+             "target": "spot", "order_fee": "0.00000079", "source_action": "manual", "unwound_trade_id": None,
+             "trade_id": None, "client_order_id": "buy-CEL-ETH-1579499312988332", "settings": None,
+             "trailing_stop_type": None, "trailing_stop_value": None, "executions": [
+                {"id": 253095921, "quantity": "1.0", "price": "0.00079", "taker_side": "buy",
+                 "created_at": 1579499313, "my_side": "buy"}], "stop_triggered_time": None}
         ],
         "current_page": 1,
         "total_pages": 1
@@ -719,3 +720,22 @@ class FixtureLiquid:
                                  "target": "spot", "order_fee": 0.0, "source_action": "manual",
                                  "unwound_trade_id": None, "trade_id": None,
                                  "client_order_id": "buy-CEL-ETH-1579592561189772"}
+
+    ORDER_BUY_NOT_FILLED = {"id": 2129857715, "order_type": "limit", "quantity": "1.0", "disc_quantity": "0.0",
+                            "iceberg_total_quantity": "0.0", "side": "buy", "filled_quantity": "0.0",
+                            "price": 0.0004068, "created_at": 1582094584, "updated_at": 1582094584, "status": "live",
+                            "leverage_level": 1, "source_exchange": "QUOINE", "product_id": 500, "margin_type": None,
+                            "take_profit": None, "stop_loss": None, "trading_type": "spot", "product_code": "CASH",
+                            "funding_currency": "ETH", "crypto_account_id": None, "currency_pair_code": "CELETH",
+                            "average_price": 0.0, "target": "spot", "order_fee": 0.0, "source_action": "manual",
+                            "unwound_trade_id": None, "trade_id": None,
+                            "client_order_id": "buy-CEL-ETH-1582094584011288"}
+
+    ORDER_BUY_CANCEL = {"id": 2129857715, "order_type": "limit", "quantity": "1.0", "disc_quantity": "0.0",
+                        "iceberg_total_quantity": "0.0", "side": "buy", "filled_quantity": "0.0", "price": 0.0004068,
+                        "created_at": 1582094584, "updated_at": 1582094586, "status": "cancelled", "leverage_level": 1,
+                        "source_exchange": "QUOINE", "product_id": 500, "margin_type": None, "take_profit": None,
+                        "stop_loss": None, "trading_type": "spot", "product_code": "CASH", "funding_currency": "ETH",
+                        "crypto_account_id": None, "currency_pair_code": "CELETH", "average_price": 0.0,
+                        "target": "spot", "order_fee": 0.0, "source_action": "manual", "unwound_trade_id": None,
+                        "trade_id": None, "client_order_id": "buy-CEL-ETH-1582094584011288"}
