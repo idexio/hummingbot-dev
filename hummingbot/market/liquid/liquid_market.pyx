@@ -618,6 +618,9 @@ cdef class LiquidMarket(MarketBase):
             if order_update is None:
                 try:
                     order = await self.get_order(client_order_id)
+                    self.logger().info(f"_update_order_status: {client_order_id} ex_order_id {exchange_order_id}"
+                                       f" exists but list_orders does not return. Order status: {order.get('status')}"
+                                       f" Order: {order}")
                 except IOError as e:
                     if "order not found" in str(e).lower():
                         # The order does not exist. So we should not be tracking it.
@@ -1136,13 +1139,14 @@ cdef class LiquidMarket(MarketBase):
                 )
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as ex:
                 self.logger().network(
                     "Unexpected error while fetching account updates.",
                     exc_info=True,
                     app_warning_msg=f"Could not fetch account updates on Liquid. "
                                     f"Check API key and network connection."
                 )
+                self.logger().info(f"_status_polling_loop Exception: {str(ex)}.")
 
     async def _trading_rules_polling_loop(self):
         """
