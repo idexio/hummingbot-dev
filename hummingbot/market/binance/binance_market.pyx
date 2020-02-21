@@ -752,10 +752,11 @@ cdef class BinanceMarket(MarketBase):
                 self._last_pull_timestamp = self._current_timestamp
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as ex:
                 self.logger().network("Unexpected error while fetching account updates.", exc_info=True,
                                       app_warning_msg="Could not fetch account updates from Binance. "
                                                       "Check API key and network connection.")
+                self.logger().info(f"Exception: {str(ex)}")
                 await asyncio.sleep(0.5)
 
     async def _trading_rules_polling_loop(self):
@@ -769,10 +770,11 @@ cdef class BinanceMarket(MarketBase):
                 await asyncio.sleep(60)
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as ex:
                 self.logger().network("Unexpected error while fetching trading rules.", exc_info=True,
                                       app_warning_msg="Could not fetch new trading rules from Binance. "
                                                       "Check network connection.")
+                self.logger().info(f"Exception: {str(ex)}")
                 await asyncio.sleep(0.5)
 
     @property
@@ -1105,6 +1107,8 @@ cdef class BinanceMarket(MarketBase):
                     # Required by cancel_all() below.
                     "origClientOrderId": order_id
                 }
+            else:
+                raise e
 
         if isinstance(cancel_result, dict) and cancel_result.get("status") == "CANCELED":
             self.logger().info(f"Successfully cancelled order {order_id}.")

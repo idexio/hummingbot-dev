@@ -532,22 +532,26 @@ class BinanceMarketUnitTest(unittest.TestCase):
             self.assertEqual(cr.success, True)
 
     def test_server_time_offset(self):
+        orig_time = time.time
+
+        def delayed_time():
+            return orig_time() - 30.0
+
         time_obj: BinanceTime = binance_client_module.time
         old_check_interval: float = time_obj.SERVER_TIME_OFFSET_CHECK_INTERVAL
         time_obj.SERVER_TIME_OFFSET_CHECK_INTERVAL = 1.0
-        time_obj.stop()
-        time_obj.start()
-
         try:
-            with patch("hummingbot.market.binance.binance_time.time") as market_time:
-                def delayed_time():
-                    return time.time() - 30.0
-                market_time.time = delayed_time
-                self.run_parallel(asyncio.sleep(3.0))
-                time_offset = BinanceTime.get_instance().time_offset_ms
-                # check if it is less than 5% off
-                self.assertTrue(time_offset > 10000)
-                self.assertTrue(abs(time_offset - 30.0 * 1e3) < 1.5 * 1e3)
+            with patch("time.time", autospec=True, side_effect=delayed_time):
+                time_obj.stop()
+                # Check to make sure the clock on binance_time is delayed.
+                self.assertGreaterEqual(orig_time() - time_obj.time(), 25)
+                time_obj.start()
+                # There is a check on set_server_time_offset for 5 seconds, got to wait here a bit
+                self.run_parallel(asyncio.sleep(6))
+                self.run_parallel(time_obj.set_server_time_offset())
+                print(f"bin_timeoffset: {time_obj._time_offset_ms}")
+                # Assuming local system clock is no more than 2 seconds different to Binance server time.
+                self.assertLessEqual(abs(time_obj.time() - orig_time()), 2)
         finally:
             time_obj.SERVER_TIME_OFFSET_CHECK_INTERVAL = old_check_interval
             time_obj.stop()
