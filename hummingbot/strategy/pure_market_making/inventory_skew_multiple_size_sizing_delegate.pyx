@@ -9,7 +9,7 @@ from hummingbot.core.event.events import (
     TradeType
 )
 from hummingbot.logger import HummingbotLogger
-from .data_types import SizingProposal
+from .data_types import SizingProposal, TargetBaseQuoteRatios
 from .pure_market_making_v2 cimport PureMarketMakingStrategyV2
 
 s_logger = None
@@ -34,6 +34,41 @@ cdef class InventorySkewMultipleSizeSizingDelegate(OrderSizingDelegate):
         if s_logger is None:
             s_logger = logging.getLogger(__name__)
         return s_logger
+
+    @staticmethod
+    def calculate_target_base_quote_ratios(
+            base_asset_balance: Decimal,
+            quote_asset_balance: Decimal,
+            mid_price: Decimal,
+            target_base_percent: Decimal) -> TargetBaseQuoteRatios:
+        total_base_asset_quote_value = base_asset_balance * mid_price
+        total_quote_asset_quote_value = quote_asset_balance
+        total_quote_value = total_base_asset_quote_value + total_quote_asset_quote_value
+
+        if total_quote_value == s_decimal_0:
+            return TargetBaseQuoteRatios(s_decimal_0, s_decimal_0)
+
+        # Calculate percent value of base and quote
+        current_base_percent = total_base_asset_quote_value / total_quote_value
+        current_quote_percent = total_quote_asset_quote_value / total_quote_value
+
+        target_quote_percent = Decimal(1) - target_base_percent
+
+        # Calculate target ratio based on current percent vs. target percent
+        current_target_base_ratio = current_base_percent / target_base_percent \
+            if target_base_percent > s_decimal_0 else s_decimal_0
+        current_target_quote_ratio = current_quote_percent / target_quote_percent \
+            if target_quote_percent > s_decimal_0 else s_decimal_0
+
+        # By default 100% of order size is on both sides, therefore adjusted ratios should be 2 (100% + 100%).
+        # If target base percent is 0 (0%) target quote ratio is 200%.
+        # If target base percent is 1 (100%) target base ratio is 200%.
+        if current_target_base_ratio > Decimal(1) or current_target_quote_ratio == s_decimal_0:
+            current_target_base_ratio = Decimal(2) - current_target_quote_ratio
+        else:
+            current_target_quote_ratio = Decimal(2) - current_target_base_ratio
+
+        return TargetBaseQuoteRatios(current_target_base_ratio, current_target_quote_ratio)
 
     @property
     def order_start_size(self) -> Decimal:
