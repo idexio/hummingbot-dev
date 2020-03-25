@@ -37,7 +37,7 @@ from hummingbot.core.utils.async_utils import safe_ensure_future
 DISABLED_COMMANDS = {
     "bounty --restore-id",  # disabled because it requires additional logic in the ui
     "bounty --register",    # disabled because it requires additional logic in the ui
-    "config",               # disabled because it requires additional logic in the ui
+    # "config",               # disabled because it requires additional logic in the ui
     "export_private_key",   # disabled for security
 }
 
@@ -170,19 +170,20 @@ class TelegramNotifier(NotifierBase):
         bot = bot or self._updater.bot
 
         # command options that show up on user's screen
-        approved_commands = [c for c in self._hb.parser.commands if c not in DISABLED_COMMANDS]
+        # approved_commands = [c for c in self._hb.parser.commands if c not in DISABLED_COMMANDS]
+        approved_commands = ["status", "history", "config ask_place_threshold", "config bid_place_threshold"]
         keyboard = self._divide_chunks(approved_commands)
-        reply_markup = ReplyKeyboardMarkup(keyboard)
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
         # wrapping text in ``` to prevent formatting issues
-        formatted_msg = f'```\n{msg}\n```'
+        formatted_msg = f'\n{msg}\n'
 
         try:
             try:
                 await self._async_call_scheduler.call_async(lambda: bot.send_message(
                     self._chat_id,
                     text=formatted_msg,
-                    parse_mode=ParseMode.MARKDOWN,
+                    parse_mode=ParseMode.HTML,
                     reply_markup=reply_markup
                 ))
             except NetworkError as network_err:
