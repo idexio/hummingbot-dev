@@ -767,6 +767,7 @@ cdef class BinanceMarket(MarketBase):
         self._async_scheduler.stop()
 
     async def start_network(self):
+        self.logger().info("Connector network starting...")
         self._order_book_tracker.start()
         self._trading_rules_polling_task = safe_ensure_future(self._trading_rules_polling_loop())
         if self._trading_required:
@@ -775,6 +776,7 @@ cdef class BinanceMarket(MarketBase):
             self._user_stream_event_listener_task = safe_ensure_future(self._user_stream_event_listener())
 
     def _stop_network(self):
+        self.logger().info("Stopping network and all tasks...")
         self._order_book_tracker.stop()
         if self._status_polling_task is not None:
             self._status_polling_task.cancel()
