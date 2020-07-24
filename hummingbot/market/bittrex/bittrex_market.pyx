@@ -471,6 +471,7 @@ cdef class BittrexMarket(MarketBase):
     async def _user_stream_event_listener(self):
         async for stream_message in self._iter_user_stream_queue():
             try:
+                self.logger().info(f"FA - {stream_message}")
                 content = stream_message.content.get("content")
                 event_type = stream_message.content.get("event_type")
 
@@ -715,6 +716,7 @@ cdef class BittrexMarket(MarketBase):
             }
 
         api_response = await self._api_request("POST", path_url=path_url, body=body)
+        self.logger().info(f"FA - {api_response}")
 
         return api_response
 

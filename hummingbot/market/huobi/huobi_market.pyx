@@ -620,6 +620,7 @@ cdef class HuobiMarket(MarketBase):
             data=params,
             is_auth_required=True
         )
+        self.logger().info(f"FA - {exchange_order_id}")
         return str(exchange_order_id)
 
     async def execute_buy(self,

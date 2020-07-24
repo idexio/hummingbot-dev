@@ -281,6 +281,7 @@ cdef class KucoinMarket(MarketBase):
     async def _user_stream_event_listener(self):
         async for event_message in self._iter_user_event_queue():
             try:
+                self.logger().info(f"FAWS - {event_message}")
                 event_type = event_message.get("type")
                 event_topic = event_message.get("topic")
                 execution_data = event_message.get("data")
@@ -684,6 +685,7 @@ cdef class KucoinMarket(MarketBase):
             is_auth_required=True,
             is_partner_required=True
         )
+        self.logger().info(f"FA - {exchange_order_id}")
         return str(exchange_order_id["data"]["orderId"])
 
     async def execute_buy(self,

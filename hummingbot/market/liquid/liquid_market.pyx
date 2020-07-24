@@ -776,6 +776,7 @@ cdef class LiquidMarket(MarketBase):
         """
         async for event_message in self._iter_user_event_queue():
             try:
+                self.logger().info(f"FAWS - {event_message}")
                 content = json.loads(event_message.content.get('data', {}))
                 event_type = content.get("status")
 
@@ -883,6 +884,7 @@ cdef class LiquidMarket(MarketBase):
         }
 
         order_result = await self._api_request("post", path_url=path_url, data=data)
+        self.logger().info(f"FA - {order_result}")
         return order_result
 
     async def execute_buy(self,

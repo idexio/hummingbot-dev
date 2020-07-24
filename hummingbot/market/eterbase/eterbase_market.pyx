@@ -660,6 +660,7 @@ cdef class EterbaseMarket(MarketBase):
         """
         async for event_message in self._iter_user_event_queue():
             try:
+                self.logger().info(f"FAWS - {event_message}")
                 content = event_message.content
                 event_type = content.get("type")
                 exchange_order_ids = [content.get("orderId")]
@@ -802,6 +803,7 @@ cdef class EterbaseMarket(MarketBase):
             self.logger().error(f"Unsuported OrderType - {order_type}.", exc_info=True)
 
         order_result = await api_request("post", path_url = path_url, data = data, auth = self._eterbase_auth)
+        self.logger().info(f"FA - {order_result}")
 
         return order_result
 

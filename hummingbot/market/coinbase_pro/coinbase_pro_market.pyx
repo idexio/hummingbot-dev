@@ -601,6 +601,7 @@ cdef class CoinbaseProMarket(MarketBase):
         """
         async for event_message in self._iter_user_event_queue():
             try:
+                self.logger().info(f"FAWS - {event_message}")
                 content = event_message.content
                 event_type = content.get("type")
                 exchange_order_ids = [content.get("order_id"),
@@ -728,6 +729,7 @@ cdef class CoinbaseProMarket(MarketBase):
         if order_type is OrderType.LIMIT:
             data["price"] = f"{price:f}"
         order_result = await self._api_request("post", path_url=path_url, data=data)
+        self.logger().info(f"FA - {order_result}")
         return order_result
 
     async def execute_buy(self,
