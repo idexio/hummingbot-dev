@@ -16,7 +16,6 @@ from typing import (
     AsyncIterable,
 )
 from libc.stdint cimport int64_t
-import copy
 
 from hummingbot.core.clock cimport Clock
 from hummingbot.core.data_type.cancellation_result import CancellationResult
@@ -128,7 +127,6 @@ cdef class LiquidMarket(MarketBase):
         self._product_dict = {}
         self._trading_rules_polling_task = None
         self._shared_client = None
-        self._ws_user_balance_update = False
 
     @property
     def name(self) -> str:
@@ -185,14 +183,6 @@ cdef class LiquidMarket(MarketBase):
             in_flight_order.to_limit_order()
             for in_flight_order in self._in_flight_orders.values()
         ]
-
-    @property
-    def inflight_orders(self) -> Dict[str, LiquidInFlightOrder]:
-        """
-        *required
-        :return: list of inflight orders
-        """
-        return self._in_flight_orders
 
     @property
     def tracking_states(self) -> Dict[str, any]:
@@ -930,13 +920,6 @@ cdef class LiquidMarket(MarketBase):
                              f"{trading_rule.min_order_size}.")
 
         try:
-            self.apply_execute_order_to_available_balance(
-                trading_pair=trading_pair,
-                order_amount=decimal_amount,
-                order_price=decimal_price,
-                is_buy=True
-            )
-
             self.c_start_tracking_order(order_id, trading_pair, order_type, TradeType.BUY, decimal_price, decimal_amount)
             order_result = await self.place_order(order_id, trading_pair, decimal_amount, True, order_type, decimal_price)
             exchange_order_id = str(order_result["id"])
@@ -1000,13 +983,6 @@ cdef class LiquidMarket(MarketBase):
                              f"{trading_rule.min_order_size}.")
 
         try:
-            self.apply_execute_order_to_available_balance(
-                trading_pair=trading_pair,
-                order_amount=decimal_amount,
-                order_price=decimal_price,
-                is_buy=False
-            )
-
             self.c_start_tracking_order(order_id, trading_pair, order_type, TradeType.SELL, decimal_price, decimal_amount)
             order_result = await self.place_order(order_id, trading_pair, decimal_amount, False, order_type, decimal_price)
 
@@ -1064,7 +1040,6 @@ cdef class LiquidMarket(MarketBase):
 
             if order_status == 'cancelled' and cancelled_id == exchange_order_id:
                 self.logger().info(f"Successfully cancelled order {order_id}.")
-                self.apply_execute_cancel_to_available_balance(self._in_flight_orders[order_id])
                 self.c_stop_tracking_order(order_id)
                 self.c_trigger_event(self.MARKET_ORDER_CANCELLED_EVENT_TAG,
                                      OrderCancelledEvent(self._current_timestamp, order_id))
@@ -1077,7 +1052,6 @@ cdef class LiquidMarket(MarketBase):
             if "order not found" in str(e).lower():
                 # The order was never there to begin with. So cancelling it is a no-op but semantically successful.
                 self.logger().info(f"The order {order_id} does not exist on Liquid. No cancellation needed.")
-                self.apply_execute_cancel_to_available_balance(self._in_flight_orders[order_id])
                 self.c_stop_tracking_order(order_id)
                 self.c_trigger_event(self.MARKET_ORDER_CANCELLED_EVENT_TAG,
                                      OrderCancelledEvent(self._current_timestamp, order_id))
@@ -1147,7 +1121,6 @@ cdef class LiquidMarket(MarketBase):
                     self._update_balances(),
                     self._update_order_status(),
                 )
-                self._in_flight_orders_snapshot = copy.deepcopy(self._in_flight_orders)
             except asyncio.CancelledError:
                 raise
             except Exception:
