@@ -1,7 +1,7 @@
 import typing
 
 from dataclasses import dataclass, asdict
-from aiohttp import ClientSession
+from aiohttp import ClientSession, WSMsgType, WSMessage
 
 from .exceptions import RemoteApiError
 from ..conf import settings
@@ -27,6 +27,45 @@ class AsyncBaseClient:
     def __post_init__(self):
         if not self.session:
             self.session = ClientSession()
+
+    async def subscribe(self,
+                        subscriptions: typing.List[typing.Union[str, typing.Dict]] = None,
+                        markets: typing.List[str] = None,
+                        method: str = "subscribe",
+                        message_cls: typing.Type = None):
+        url = settings.ws_api_url
+        async with self.session.ws_connect(url) as ws:
+            subscription_request = {
+                "method": method,
+            }
+            if markets:
+                subscription_request.update({
+                    "markets": markets
+                })
+            if subscriptions:
+                subscription_request.update({
+                    "subscriptions": subscriptions
+                })
+
+            await ws.send_json(subscription_request)
+            async for message in ws:   # type: WSMessage
+                if message.type in (
+                        WSMsgType.CLOSE,
+                        WSMsgType.CLOSED,
+                        WSMsgType.CLOSING,
+                        WSMsgType.ERROR):
+                    break
+                message = message.json()
+                if message_cls and isinstance(message, dict):
+                    message = message_cls(**message)
+                yield message
+
+        # async with websockets.connect(stream_url) as ws:
+        #     ws: websockets.WebSocketClientProtocol = ws
+        #     async for raw_msg in self._inner_messages(ws):
+        #         msg = ujson.loads(raw_msg)
+        #         trade_msg: OrderBookMessage = BinanceOrderBook.trade_message_from_exchange(msg)
+        #         output.put_nowait(trade_msg)
 
     async def request(self,
                       method: str,
