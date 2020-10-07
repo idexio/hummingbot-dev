@@ -1,10 +1,8 @@
 import time
 import asyncio
-import aiohttp
 import pandas as pd
 
-from dataclasses import asdict
-from typing import List, Dict, Any
+from typing import List, Dict
 
 from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.core.data_type.order_book_message import OrderBookMessage, OrderBookMessageType
@@ -134,7 +132,7 @@ class IdexOrderBookTrackerDataSource(OrderBookTrackerDataSource):
             try:
                 client = AsyncIdexClient()
                 async for message in client.subscribe(  # type: WebSocketResponseTradeShort
-                        subscriptions=["trade"],
+                        subscriptions=["trades"],
                         markets=[to_idex_pair(pair) for pair in self._trading_pairs],
                         message_cls=WebSocketResponseTradeShort):
                     timestamp = message.t
