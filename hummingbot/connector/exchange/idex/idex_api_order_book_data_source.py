@@ -1,5 +1,7 @@
 import time
 import asyncio
+
+import aiohttp
 import pandas as pd
 
 from typing import List, Dict
@@ -19,7 +21,7 @@ class IdexOrderBookTrackerDataSource(OrderBookTrackerDataSource):
     @classmethod
     async def get_last_traded_price(cls, pair: str) -> float:
         result = await AsyncIdexClient().market.get_tickers(
-            market=to_idex_pair(pair)
+            market=await to_idex_pair(pair)
         )
         if result:
             return float(result[0].close)
@@ -30,20 +32,12 @@ class IdexOrderBookTrackerDataSource(OrderBookTrackerDataSource):
         results = await safe_gather(*tasks)
         return {pair: result for pair, result in zip(trading_pairs, results) if result}
 
-    # @staticmethod
-    # async def get_snapshot(client: aiohttp.ClientSession = None, trading_pair: str = None, limit: int = 1000) -> Dict[str, Any]:
-    #     """
-    #     TODO: Verify do we actully need to preserve Interface described in Dev Manual
-    #
-    #     :param client:
-    #     :param trading_pair:
-    #     :param limit:
-    #     :return:
-    #     """
-    #     pair = to_idex_pair(trading_pair)
-    #     client = AsyncIdexClient(session=client)
-    #     orderbook =
-    #     return asdict(orderbook)
+    @staticmethod
+    async def get_snapshot(client: aiohttp.ClientSession = None, trading_pair: str = None, limit: int = 1000) -> Dict[str, Any]:
+        """
+        TODO: Verify do we actually need to preserve Interface described in Dev Manual
+        """
+        raise NotImplementedError()
 
     async def get_new_order_book(self, trading_pair: str) -> OrderBook:
         client = AsyncIdexClient()
@@ -133,7 +127,7 @@ class IdexOrderBookTrackerDataSource(OrderBookTrackerDataSource):
                 client = AsyncIdexClient()
                 async for message in client.subscribe(  # type: WebSocketResponseTradeShort
                         subscriptions=["trades"],
-                        markets=[to_idex_pair(pair) for pair in self._trading_pairs],
+                        markets=[(await to_idex_pair(pair)) for pair in self._trading_pairs],
                         message_cls=WebSocketResponseTradeShort):
                     timestamp = message.t
                     trade_message = OrderBookMessage(OrderBookMessageType.TRADE, {
