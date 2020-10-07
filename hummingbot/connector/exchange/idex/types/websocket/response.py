@@ -92,23 +92,6 @@ class WebSocketResponseTradeShort:
     s: OrderSide
     u: int
 
-#  *
-#  * @typedef {Object} WebSocketResponseTradeLong
-#  * @property {string} market - Market symbol
-#  * @property {string} fillId - Trade identifier
-#  * @property {string} price - Price of the trade in quote terms
-#  * @property {string} quantity - Quantity of the trade in base terms
-#  * @property {string} quoteQuantity - Quantity of the trade in quote terms
-#  * @property {number} time - Timestamp of the trade
-#  * @property {string} makerSide - Maker side of the trade, buy or sell
-#  * @property {number} sequence - Fill sequence number of the trade
-#  */
-# export interface WebSocketResponseTradeLong
-#   extends restResponse.RestResponseTrade {
-#   market: string; // m
-# }
-#
-
 
 @dataclass
 class WebSocketResponseL1OrderBookShort:
