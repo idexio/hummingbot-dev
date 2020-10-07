@@ -92,10 +92,15 @@ class AsyncBaseClient:
         print(f"{method.upper()}: {abs_endpoint} with {params or payload}")
 
         async with self.session as session:
-            response = await session.request(
+            resp = await session.request(
                 method, abs_endpoint, params=params, json=payload
             )
-            result = await response.json()
+            if resp.status != 200:
+                raise RemoteApiError(
+                    code="RESPONSE_ERROR",
+                    message=f"Got unexpected response with status `{resp.status}`"
+                )
+            result = await resp.json()
             if isinstance(result, dict) and set(result.keys()) == {"code", "message"}:
                 raise RemoteApiError(
                     code=result["code"],
