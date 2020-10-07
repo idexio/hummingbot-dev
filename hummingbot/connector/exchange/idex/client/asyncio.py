@@ -60,13 +60,6 @@ class AsyncBaseClient:
                     message = message_cls(**message)
                 yield message
 
-        # async with websockets.connect(stream_url) as ws:
-        #     ws: websockets.WebSocketClientProtocol = ws
-        #     async for raw_msg in self._inner_messages(ws):
-        #         msg = ujson.loads(raw_msg)
-        #         trade_msg: OrderBookMessage = BinanceOrderBook.trade_message_from_exchange(msg)
-        #         output.put_nowait(trade_msg)
-
     async def request(self,
                       method: str,
                       endpoint: str,
