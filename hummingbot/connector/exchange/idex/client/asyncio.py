@@ -1,3 +1,4 @@
+import functools
 import typing
 
 from dataclasses import dataclass, asdict
@@ -7,6 +8,21 @@ from .exceptions import RemoteApiError
 from ..conf import settings
 from ..types.rest import request
 from ..types.rest import response
+
+
+def rest(call, request_cls=None, response_cls=None, method="get"):
+    def decorator(f):
+        @functools.wraps(f)
+        async def wrapper(self, **kwargs):
+            return await self.client.request(
+                method,
+                call,
+                kwargs,
+                request_cls=request_cls,
+                response_cls=response_cls
+            )
+        return wrapper
+    return decorator
 
 
 def clean_dict(data):
@@ -78,7 +94,7 @@ class AsyncBaseClient:
             # Clean payload
             payload = clean_dict(data) if data else None
 
-        # Init sesssion
+        # Init session
         abs_endpoint = f"{settings.rest_api_url}/{endpoint.lstrip('/')}"
 
         # TODO: Move to logging
@@ -123,32 +139,25 @@ class Public:
 
     client: AsyncIdexClient
 
+    @rest("ping")
     async def get_ping(self) -> dict:
-        return await self.client.request("get", "ping")
+        pass
 
+    @rest("time", response_cls=response.RestResponseTime)
     async def get_time(self) -> response.RestResponseTime:
-        return await self.client.request(
-            "get", "time",
-            response_cls=response.RestResponseTime
-        )
+        pass
 
+    @rest("exchange", response_cls=response.RestResponseExchangeInfo)
     async def get_exchange(self) -> response.RestResponseExchangeInfo:
-        return await self.client.request(
-            "get", "exchange",
-            response_cls=response.RestResponseExchangeInfo
-        )
+        pass
 
+    @rest("assets", response_cls=response.RestResponseAsset)
     async def get_assets(self) -> typing.List[response.RestResponseAsset]:
-        return await self.client.request(
-            "get", "assets",
-            response_cls=response.RestResponseAsset
-        )
+        pass
 
+    @rest("markets", response_cls=response.RestResponseMarket)
     async def get_markets(self) -> typing.List[response.RestResponseMarket]:
-        return await self.client.request(
-            "get", "markets",
-            response_cls=response.RestResponseMarket
-        )
+        pass
 
 
 @dataclass
@@ -156,45 +165,33 @@ class Market:
 
     client: AsyncIdexClient
 
-    async def get_tickers(self,
+    @rest("tickers", request.RestRequestFindMarkets, response.RestResponseTicker)
+    async def get_tickers(self, *,
                           market: typing.Optional[str] = None,
                           regionOnly: typing.Optional[bool] = None) -> typing.List[response.RestResponseTicker]:
-        return await self.client.request(
-            "get", "tickers", clean_locals(locals()),
-            request_cls=request.RestRequestFindMarkets,
-            response_cls=response.RestResponseTicker
-        )
+        pass
 
-    async def get_candles(self,
+    @rest("candles", request.RestRequestFindCandles, response.RestResponseCandle)
+    async def get_candles(self, *,
                           market: str,
                           interval: request.CandleInterval,
                           start: typing.Optional[int] = None,
                           end: typing.Optional[int] = None,
                           limit: typing.Optional[int] = None) -> typing.List[response.RestResponseCandle]:
-        return await self.client.request(
-            "get", "candles", clean_locals(locals()),
-            request_cls=request.RestRequestFindCandles,
-            response_cls=response.RestResponseCandle
-        )
+        pass
 
-    async def get_trades(self,
+    @rest("trades", request.RestRequestFindTrades, response.RestResponseTrade)
+    async def get_trades(self, *,
                          market: str,
                          start: typing.Optional[int] = None,
                          end: typing.Optional[int] = None,
                          limit: typing.Optional[int] = None,
                          fromId: typing.Optional[str] = None) -> typing.List[response.RestResponseTrade]:
-        return await self.client.request(
-            "get", "trades", clean_locals(locals()),
-            request_cls=request.RestRequestFindTrades,
-            response_cls=response.RestResponseTrade
-        )
+        pass
 
-    async def get_orderbook(self,
+    @rest("orderbook", request.RestRequestOrderBook, response.RestResponseOrderBook)
+    async def get_orderbook(self, *,
                             market: str,
                             level: typing.Optional[int] = 1,
                             limit: typing.Optional[int] = 50) -> response.RestResponseOrderBook:
-        return await self.client.request(
-            "get", "orderbook", clean_locals(locals()),
-            request_cls=request.RestRequestOrderBook,
-            response_cls=response.RestResponseOrderBook
-        )
+        pass
