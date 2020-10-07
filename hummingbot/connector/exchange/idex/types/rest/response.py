@@ -120,11 +120,11 @@ class RestResponseOrder:
 
 
 @dataclass
-class RestResponseCancelledOrderItem:
+class RestResponseCanceledOrderItem:
     orderId: str
 
 
-RestResponseCancelledOrder = typing.List[RestResponseCancelledOrderItem]
+RestResponseCanceledOrder = typing.List[RestResponseCanceledOrderItem]
 
 Price = str
 Size = str

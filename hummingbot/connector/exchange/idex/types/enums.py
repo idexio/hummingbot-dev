@@ -66,7 +66,7 @@ OrderStateChange = typing.Literal[
     "new",
     "activated",
     "fill",
-    "cancelled",
+    "canceled",
     "expired",
 ]
 
@@ -76,7 +76,7 @@ OrderStatus = typing.Literal[
     "open",
     "partiallyFilled",
     "filled",
-    "cancelled",
+    "canceled",
     "rejected",
     "expired",
     "testOnlyAccepted",
