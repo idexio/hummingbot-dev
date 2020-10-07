@@ -1,13 +1,10 @@
 import functools
 import re
 import time
-
-from typing import Optional
-
 import typing
 
+from typing import Optional
 from .client.asyncio import AsyncIdexClient
-from .types.rest.response import RestResponseAsset
 
 
 def no_arg_cache(f=None, *, for_seconds=30):
