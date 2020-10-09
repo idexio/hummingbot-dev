@@ -2,11 +2,11 @@ from hummingbot.client.config.config_var import ConfigVar
 from hummingbot.client.config.config_methods import using_exchange
 
 
-CENTRALIZED = True  # True for centralized exchange and false for decentralized exchange
+CENTRALIZED = True
 
-EXAMPLE_PAIR = "DIL-ETH"  # Example of supported pair on exchange
+EXAMPLE_PAIR = "DIL-ETH"
 
-DEFAULT_FEES = [0.1, 0.1]  # [maker fee, taker fee]
+DEFAULT_FEES = [0.1, 0.2]
 
 KEYS = {
     "idex_api_key":
