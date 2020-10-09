@@ -16,7 +16,7 @@ from .utils import to_idex_pair
 from .types.websocket.response import WebSocketResponseL2OrderBookShort, WebSocketResponseTradeShort
 
 
-class IdexOrderBookTrackerDataSource(OrderBookTrackerDataSource):
+class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
     @classmethod
     async def get_last_traded_price(cls, pair: str) -> float:
@@ -148,3 +148,9 @@ class IdexOrderBookTrackerDataSource(OrderBookTrackerDataSource):
                 self.logger().error("Unexpected error with WebSocket connection. Retrying after 30 seconds...",
                                     exc_info=True)
                 await asyncio.sleep(30.0)  # TODO: sleep timeout ?
+
+    @staticmethod
+    async def fetch_trading_pairs() -> List[str]:
+        return [
+            market.market for market in (await AsyncIdexClient().public.get_markets())
+        ]
