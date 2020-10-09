@@ -4,7 +4,7 @@ import asyncio
 import aiohttp
 import pandas as pd
 
-from typing import List, Dict
+from typing import List, Dict, Any
 
 from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.core.data_type.order_book_message import OrderBookMessage, OrderBookMessageType
@@ -33,7 +33,9 @@ class IdexOrderBookTrackerDataSource(OrderBookTrackerDataSource):
         return {pair: result for pair, result in zip(trading_pairs, results) if result}
 
     @staticmethod
-    async def get_snapshot(client: aiohttp.ClientSession = None, trading_pair: str = None, limit: int = 1000) -> Dict[str, Any]:
+    async def get_snapshot(
+            client: aiohttp.ClientSession = None,
+            trading_pair: str = None, limit: int = 1000) -> Dict[str, Any]:
         """
         TODO: Verify do we actually need to preserve Interface described in Dev Manual
         """
