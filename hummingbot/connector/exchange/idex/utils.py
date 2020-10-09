@@ -24,13 +24,13 @@ def no_arg_cache(f=None, *, for_seconds=30):
 
 
 @no_arg_cache
-async def get_trading_pairs() -> typing.List[str]:
+async def get_assets() -> typing.List[str]:
     return [asset.symbol for asset in (await AsyncIdexClient().public.get_assets())]
 
 
 @no_arg_cache
 async def get_trading_pair_splitter() -> typing.Pattern:
-    pairs = await get_trading_pairs()
+    pairs = await get_assets()
     return re.compile(rf"^(\w+)({'|'.join(pairs)})$")
 
 
