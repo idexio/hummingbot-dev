@@ -1,4 +1,5 @@
 import functools
+import json
 import typing
 
 from dataclasses import dataclass, asdict
@@ -99,7 +100,6 @@ class AsyncBaseClient:
 
         # TODO: Move to logging
         print(f"{method.upper()}: {abs_endpoint} with {params or payload}")
-
         async with self.session as session:
             resp = await session.request(
                 method, abs_endpoint, params=params, json=payload
@@ -110,6 +110,8 @@ class AsyncBaseClient:
                     message=f"Got unexpected response with status `{resp.status}`"
                 )
             result = await resp.json()
+            # TODO: Move to logging
+            print(f"RESULT: {method.upper()}: {abs_endpoint} with {params or payload}\n {json.dumps(result, indent=2)}")
             if isinstance(result, dict) and set(result.keys()) == {"code", "message"}:
                 raise RemoteApiError(
                     code=result["code"],
