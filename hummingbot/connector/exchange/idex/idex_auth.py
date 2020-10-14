@@ -28,15 +28,17 @@ class IdexAuth:
             self,
             http_method: str,
             url: str,
-            params: Dict[str, any],
-            body: Dict[str, any]) -> Dict[str, any]:
+            params: Dict[str, any] = None,
+            body: Dict[str, any] = None) -> Dict[str, any]:
+        params = params or {}
+        body = body or {}
         return getattr(self, f"generate_auth_dict_for_{http_method}")(url, params, body)
 
     def generate_auth_dict_for_get(
             self,
             url: str,
             params: Dict[str, any],
-            body: Dict[str, any]) -> Dict[str, any]:
+            body: Dict[str, any] = None) -> Dict[str, any]:
 
         if "nonce" not in params:
             params.update({
@@ -57,6 +59,7 @@ class IdexAuth:
             url: str,
             params: Dict[str, any],
             body: Dict[str, any]) -> Dict[str, any]:
+        body = body or {}
         parameters = body.get("parameters")
         if isinstance(parameters, dict) and "nonce" not in parameters:
             body["parameters"].update({
@@ -70,7 +73,7 @@ class IdexAuth:
                 "IDEX-API-Key": self.api_key,
                 "IDEX-HMAC-Signature": self.sign(body)
             },
-            "body": body
+            "body": body,
         }
 
     generate_auth_dict_for_delete = generate_auth_dict_for_post

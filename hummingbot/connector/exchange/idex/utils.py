@@ -2,8 +2,11 @@ import functools
 import re
 import time
 import typing
+import uuid
 
 from typing import Optional
+
+from hummingbot.core.event.events import OrderType
 from .client.asyncio import AsyncIdexClient
 
 
@@ -43,3 +46,22 @@ async def to_idex_pair(pair: str) -> Optional[str]:
     # Exceptions are now logged as warnings in trading pair fetcher
     except Exception:
         return None
+
+
+IDEX_ORDER_TYPE_MAP = {
+    OrderType.MARKET: "market",
+    OrderType.LIMIT: "limit",
+    OrderType.LIMIT_MAKER: "limitMaker",
+}
+
+
+def to_idex_order_type(
+        order_type: typing.Literal[
+            OrderType.MARKET,
+            OrderType.LIMIT,
+            OrderType.LIMIT_MAKER]):
+    return IDEX_ORDER_TYPE_MAP[order_type]
+
+
+def create_id():
+    return str(uuid.uuid4())

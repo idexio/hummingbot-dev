@@ -6,32 +6,17 @@ from ..enums import *
 
 
 @dataclass
-class RestRequestCancelOrdersBase:
-    nonce: str
+class RestRequestCancelOrder:
     wallet: str
-
-
-@dataclass
-class RestRequestCancelOrder(RestRequestCancelOrdersBase):
+    nonce: typing.Optional[str] = None
     orderId: typing.Optional[str] = None
     market: typing.Optional[str] = None
 
 
 @dataclass
-class RestRequestCancelOrders(RestRequestCancelOrdersBase):
-    """
-    NOTE: This class is derived from JS lib and looks like useless
-    """
-    pass
-
-
-RestRequestCancelOrderOrOrders = typing.Union[RestRequestCancelOrder, RestRequestCancelOrders]
-
-
-@dataclass
 class RestRequestCancelOrdersBody:
-    parameters: RestRequestCancelOrderOrOrders
-    signature: str
+    parameters: RestRequestCancelOrder
+    signature: str = None
 
 
 @dataclass
@@ -120,106 +105,30 @@ class RestRequestAllOrderParameters:
     """
     NOTE: Is not documented
     """
-    nonce: str
     wallet: str
     market: str
     type: OrderType
     side: OrderSide
-    timeInForce: typing.Optional[OrderTimeInForce]
-    clientOrderId: typing.Optional[str]
-    selfTradePrevention: typing.Optional[OrderSelfTradePrevention]
-    cancelAfter: typing.Optional[typing.Union[int, float]]
+    nonce: typing.Optional[str] = None
+    quantity: typing.Optional[str] = None
+    quoteOrderQuantity: typing.Optional[str] = None
+    price: typing.Optional[str] = None
+    stopPrice: typing.Optional[str] = None
+    clientOrderId: typing.Optional[str] = None
+    timeInForce: typing.Optional[OrderTimeInForce] = None
+    selfTradePrevention: typing.Optional[OrderSelfTradePrevention] = "gtc"
+    cancelAfter: typing.Optional[typing.Union[int, float]] = "dc"
 
 
 @dataclass
-class RestRequestLimitOrder(RestRequestAllOrderParameters):
-    type: typing.Literal['limit', 'limitMaker']
-    price: str
+class RestRequestOrder(RestRequestAllOrderParameters):
+    pass
 
 
 @dataclass
-class RestRequestMarketOrder(RestRequestAllOrderParameters):
-    type: typing.Literal['market']
-
-
-@dataclass
-class RestRequestStopLossOrder(RestRequestAllOrderParameters):
-    type: typing.Literal['stopLoss']
-    stopPrice: str
-
-
-@dataclass
-class RestRequestStopLossLimitOrder(RestRequestAllOrderParameters):
-    type: typing.Literal['stopLossLimit']
-    price: str
-    stopPrice: str
-
-
-@dataclass
-class RestRequestTakeProfitOrder(RestRequestAllOrderParameters):
-    type: typing.Literal['takeProfit']
-    stopPrice: str
-
-
-@dataclass
-class RestRequestTakeProfitLimitOrder(RestRequestAllOrderParameters):
-    type: typing.Literal['takeProfitLimit']
-    price: str
-    stopPrice: str
-
-
-# TODO: Rethink accroding to python typehint spec
-# @dataclass
-# class RestRequestOrderByBaseQuantity(
-#     typing.Union[
-#         RestRequestLimitOrder,
-#         RestRequestMarketOrder,
-#         RestRequestStopLossOrder,
-#         RestRequestStopLossLimitOrder,
-#         RestRequestTakeProfitOrder,
-#         RestRequestTakeProfitLimitOrder]):
-#     quoteOrderQuantity: str
-#     quantity: typing.Optional[int] = None
-
-
-# TODO: Rethink accroding to python typehint spec
-# @dataclass
-# class RestRequestOrderByQuoteQuantity(
-#     typing.Union[
-#         RestRequestLimitOrder,
-#         RestRequestMarketOrder,
-#         RestRequestStopLossOrder,
-#         RestRequestStopLossLimitOrder,
-#         RestRequestTakeProfitOrder,
-#         RestRequestTakeProfitLimitOrder]):
-#     quoteOrderQuantity: str
-#     quantity: typing.Optional[int] = None
-
-
-RestRequestOrderWithPrice = typing.Union[
-    RestRequestLimitOrder,
-    RestRequestStopLossLimitOrder,
-    RestRequestTakeProfitLimitOrder
-]
-
-
-RestRequestOrderWithStopPrice = typing.Union[
-    RestRequestStopLossOrder,
-    RestRequestStopLossLimitOrder,
-    RestRequestTakeProfitLimitOrder,
-    RestRequestTakeProfitLimitOrder
-]
-
-
-# TODO: Rethink accroding to python typehint spec
-# RestRequestOrder = typing.Union[RestRequestOrderByBaseQuantity, RestRequestOrderByQuoteQuantity]
-
-
-# TODO: Rethink accroding to python typehint spec
-# @dataclass
-# class RestRequestCreateOrderBody:
-#     parameters: RestRequestOrder
-#     signature: str
+class RestRequestCreateOrderBody:
+    parameters: RestRequestOrder
+    signature: str = None
 
 
 @dataclass
@@ -249,7 +158,7 @@ RestRequestWithdrawal = typing.Union[RestRequestWithdrawalBySymbol, RestRequestW
 @dataclass
 class RestRequestCreateWithdrawalBody:
     parameters: RestRequestWithdrawal
-    signature: str
+    signature: str = None
 
 
 @dataclass

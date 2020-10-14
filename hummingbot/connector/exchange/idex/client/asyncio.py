@@ -1,17 +1,24 @@
-import functools
 import json
 import typing
+import functools
 
 from dataclasses import dataclass, asdict
+from urllib.parse import urlencode
+
 from aiohttp import ClientSession, WSMsgType, WSMessage
 
 from .exceptions import RemoteApiError
 from ..conf import settings
+from ..idex_auth import IdexAuth
 from ..types.rest import request
 from ..types.rest import response
 
 
-def rest(call, request_cls=None, response_cls=None, method="get"):
+def rest_decorator(call,
+         request_cls: typing.Type = None,
+         response_cls: typing.Type = None,
+         method: str = "get",
+         signed: bool = False):
     def decorator(f):
         @functools.wraps(f)
         async def wrapper(self, **kwargs):
@@ -20,10 +27,46 @@ def rest(call, request_cls=None, response_cls=None, method="get"):
                 call,
                 kwargs,
                 request_cls=request_cls,
-                response_cls=response_cls
+                response_cls=response_cls,
+                signed=signed
             )
         return wrapper
     return decorator
+
+
+class SignedRest:
+
+    @staticmethod
+    def get(call: str, request_cls: typing.Type = None, response_cls: typing.Type = None):
+        return rest_decorator(call, request_cls, response_cls, signed=True)
+
+    @staticmethod
+    def post(call: str, request_cls: typing.Type = None, response_cls: typing.Type = None):
+        return rest_decorator(call, request_cls, response_cls, "post", signed=True)
+
+    @staticmethod
+    def delete(call: str, request_cls: typing.Type = None, response_cls: typing.Type = None):
+        return rest_decorator(call, request_cls, response_cls, "delete", signed=True)
+
+
+class Rest:
+
+    @staticmethod
+    def get(call: str, request_cls: typing.Type = None, response_cls: typing.Type = None):
+        return rest_decorator(call, request_cls, response_cls)
+
+    @staticmethod
+    def post(call: str, request_cls: typing.Type = None, response_cls: typing.Type = None):
+        return rest_decorator(call, request_cls, response_cls, "post")
+
+    @staticmethod
+    def delete(call: str, request_cls: typing.Type = None, response_cls: typing.Type = None):
+        return rest_decorator(call, request_cls, response_cls, "delete")
+
+    signed = SignedRest()
+
+
+rest = Rest()
 
 
 def clean_dict(data):
@@ -40,6 +83,7 @@ def clean_locals(data):
 class AsyncBaseClient:
 
     session: ClientSession = None
+    auth: IdexAuth = None
 
     def __post_init__(self):
         if not self.session:
@@ -82,27 +126,42 @@ class AsyncBaseClient:
                       endpoint: str,
                       data: typing.Union[dict, typing.Any] = None,
                       request_cls=None,
-                      response_cls=None):
+                      response_cls=None,
+                      signed=False):
+        if signed and not self.auth:
+            raise Exception("IdexAuth instance required, auth attribute was not inited")
+
         if request_cls and isinstance(data, dict):
             data = request_cls(**data)
 
-        params = None
-        payload = None
-        if method == "get":
-            # Clean params
-            params = clean_dict(data) if data else None
-        else:
-            # Clean payload
-            payload = clean_dict(data) if data else None
-
         # Init session
-        abs_endpoint = f"{settings.rest_api_url}/{endpoint.lstrip('/')}"
+        url = f"{settings.rest_api_url}/{endpoint.lstrip('/')}"
+        data = clean_dict(data) if data else None
+        headers = {
+            "Content-Type": "application/json"
+        }
+        body = None
+
+        if signed:
+            signed_payload = self.auth.generate_auth_dict(
+                method,
+                url,
+                data if method == "get" else None,
+                data if method != "get" else None
+            )
+            url = signed_payload["url"]
+            headers = signed_payload["headers"]
+            body = signed_payload.get("body")
+        elif method == "get":
+            url = f"{url}?{urlencode(data)}"
+        else:
+            body = json.dumps(data)
 
         # TODO: Move to logging
-        print(f"{method.upper()}: {abs_endpoint} with {params or payload}")
+        print(f"{method.upper()}: {url} with {body}")
         async with self.session as session:
             resp = await session.request(
-                method, abs_endpoint, params=params, json=payload
+                method, url, headers=headers, body=body
             )
             if resp.status != 200:
                 raise RemoteApiError(
@@ -111,7 +170,7 @@ class AsyncBaseClient:
                 )
             result = await resp.json()
             # TODO: Move to logging
-            # print(f"RESULT: {method.upper()}: {abs_endpoint} with {params or payload}\n {json.dumps(result, indent=2)}")
+            # print(f"RESULT: {method.upper()}: {url} with {params or payload}\n {json.dumps(result, indent=2)}")
             if isinstance(result, dict) and set(result.keys()) == {"code", "message"}:
                 raise RemoteApiError(
                     code=result["code"],
@@ -129,51 +188,55 @@ class AsyncIdexClient(AsyncBaseClient):
 
     market: "Market" = None
     public: "Public" = None
+    trade: "Trade" = None
 
     def __post_init__(self):
         super(AsyncIdexClient, self).__post_init__()
         self.market = Market(client=self)
         self.public = Public(client=self)
+        self.trade = Trade(client=self)
 
 
-@dataclass
-class Public:
+@dataclass()
+class EndpointGroup:
 
     client: AsyncIdexClient
 
-    @rest("ping")
+
+@dataclass
+class Public(EndpointGroup):
+
+    @rest.get("ping")
     async def get_ping(self) -> dict:
         pass
 
-    @rest("time", response_cls=response.RestResponseTime)
+    @rest.get("time", response_cls=response.RestResponseTime)
     async def get_time(self) -> response.RestResponseTime:
         pass
 
-    @rest("exchange", response_cls=response.RestResponseExchangeInfo)
+    @rest.get("exchange", response_cls=response.RestResponseExchangeInfo)
     async def get_exchange(self) -> response.RestResponseExchangeInfo:
         pass
 
-    @rest("assets", response_cls=response.RestResponseAsset)
+    @rest.get("assets", response_cls=response.RestResponseAsset)
     async def get_assets(self) -> typing.List[response.RestResponseAsset]:
         pass
 
-    @rest("markets", response_cls=response.RestResponseMarket)
+    @rest.get("markets", response_cls=response.RestResponseMarket)
     async def get_markets(self) -> typing.List[response.RestResponseMarket]:
         pass
 
 
 @dataclass
-class Market:
+class Market(EndpointGroup):
 
-    client: AsyncIdexClient
-
-    @rest("tickers", request.RestRequestFindMarkets, response.RestResponseTicker)
+    @rest.get("tickers", request.RestRequestFindMarkets, response.RestResponseTicker)
     async def get_tickers(self, *,
                           market: typing.Optional[str] = None,
                           regionOnly: typing.Optional[bool] = None) -> typing.List[response.RestResponseTicker]:
         pass
 
-    @rest("candles", request.RestRequestFindCandles, response.RestResponseCandle)
+    @rest.get("candles", request.RestRequestFindCandles, response.RestResponseCandle)
     async def get_candles(self, *,
                           market: str,
                           interval: request.CandleInterval,
@@ -182,7 +245,7 @@ class Market:
                           limit: typing.Optional[int] = None) -> typing.List[response.RestResponseCandle]:
         pass
 
-    @rest("trades", request.RestRequestFindTrades, response.RestResponseTrade)
+    @rest.get("trades", request.RestRequestFindTrades, response.RestResponseTrade)
     async def get_trades(self, *,
                          market: str,
                          start: typing.Optional[int] = None,
@@ -191,9 +254,23 @@ class Market:
                          fromId: typing.Optional[str] = None) -> typing.List[response.RestResponseTrade]:
         pass
 
-    @rest("orderbook", request.RestRequestOrderBook, response.RestResponseOrderBook)
+    @rest.get("orderbook", request.RestRequestOrderBook, response.RestResponseOrderBook)
     async def get_orderbook(self, *,
                             market: str,
                             level: typing.Optional[int] = 1,
                             limit: typing.Optional[int] = 50) -> response.RestResponseOrderBook:
+        pass
+
+
+@dataclass
+class Trade(EndpointGroup):
+
+    @rest.signed.post("orders", request.RestRequestCreateOrderBody, response.RestResponseOrder)
+    async def create_order(self,
+                           parameters: request.RestRequestOrder) -> response.RestResponseOrder:
+        pass
+
+    @rest.signed.delete("orders", request.RestRequestCancelOrdersBody, response.RestResponseCanceledOrderItem)
+    async def cancel_order(self,
+                           parameters: request.RestRequestCancelOrderOrOrders) -> response.RestResponseCanceledOrder:
         pass
