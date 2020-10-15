@@ -19,7 +19,7 @@ from .types.websocket.response import WebSocketResponseL2OrderBookShort, WebSock
 class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
     @classmethod
-    async def get_last_traded_price(cls, pair: str) -> float:
+    async def _get_last_traded_price(cls, pair: str) -> float:
         result = await AsyncIdexClient().market.get_tickers(
             market=await to_idex_pair(pair)
         )
@@ -28,7 +28,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
     @classmethod
     async def get_last_traded_prices(cls, trading_pairs: List[str]) -> Dict[str, float]:
-        tasks = [cls.get_last_traded_price(pair) for pair in trading_pairs]
+        tasks = [cls._get_last_traded_price(pair) for pair in trading_pairs]
         results = await safe_gather(*tasks)
         return {pair: result for pair, result in zip(trading_pairs, results) if result}
 

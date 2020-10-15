@@ -15,7 +15,7 @@ class IdexAuth:
 
     def sign(self, data: Union[str, bytes]) -> str:
         return hmac.new(
-            self.secret_key,
+            self.secret_key.encode("utf-8") if isinstance(self.secret_key, str) else self.secret_key,
             data.encode("utf-8") if isinstance(data, str) else data,
             hashlib.sha256
         ).hexdigest()
@@ -30,6 +30,7 @@ class IdexAuth:
             url: str,
             params: Dict[str, any] = None,
             body: Dict[str, any] = None) -> Dict[str, any]:
+        http_method = http_method.strip().lower()
         params = params or {}
         body = body or {}
         return getattr(self, f"generate_auth_dict_for_{http_method}")(url, params, body)
