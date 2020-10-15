@@ -272,5 +272,5 @@ class Trade(EndpointGroup):
 
     @rest.signed.delete("orders", request.RestRequestCancelOrdersBody, response.RestResponseCanceledOrderItem)
     async def cancel_order(self,
-                           parameters: request.RestRequestCancelOrderOrOrders) -> response.RestResponseCanceledOrder:
+                           parameters: request.RestRequestCancelOrder) -> response.RestResponseCanceledOrder:
         pass
