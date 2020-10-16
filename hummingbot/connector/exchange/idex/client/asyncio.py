@@ -136,6 +136,7 @@ class AsyncBaseClient:
                     "subscriptions": subscriptions
                 })
 
+            print(f"SUBREQ: {subscription_request}")
             await ws.send_json(subscription_request)
             async for message in ws:   # type: WSMessage
                 if message.type in (
@@ -145,6 +146,7 @@ class AsyncBaseClient:
                         WSMsgType.ERROR):
                     break
                 message = message.json()
+                print(f"SUBRESP: {message}")
                 if message_cls and isinstance(message, dict):
                     message = message_cls(**message)
                 yield message
@@ -217,15 +219,19 @@ class AsyncIdexClient(AsyncBaseClient):
     market: "Market" = None
     public: "Public" = None
     trade: "Trade" = None
+    user: "User" = None
 
     def __post_init__(self):
         super(AsyncIdexClient, self).__post_init__()
-        self.market = Market(client=self)
-        self.public = Public(client=self)
-        self.trade = Trade(client=self)
+        for cls in [Market, Public, Trade, User]:
+            setattr(
+                self,
+                cls.__name__.lower(),
+                cls(client=self)  # type: EndpointGroup
+            )
 
 
-@dataclass()
+@dataclass
 class EndpointGroup:
 
     client: AsyncIdexClient
@@ -301,4 +307,18 @@ class Trade(EndpointGroup):
     @rest.signed.delete("orders", request.RestRequestCancelOrdersBody, response.RestResponseCanceledOrderItem)
     async def cancel_order(self,
                            parameters: request.RestRequestCancelOrder) -> response.RestResponseCanceledOrder:
+        pass
+
+
+@dataclass
+class User(EndpointGroup):
+
+    @rest.signed.get("balances", request.RestRequestFindBalances, response.RestResponseBalance)
+    async def balances(self,
+                       wallet: str,
+                       asset: typing.Optional[str] = None) -> typing.List[response.RestResponseBalance]:
+        pass
+
+    @rest.signed.get("wallets", response_cls=response.RestResponseWallet)
+    async def wallets(self) -> typing.List[response.RestResponseWallet]:
         pass

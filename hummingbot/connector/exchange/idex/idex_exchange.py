@@ -16,8 +16,8 @@ from hummingbot.core.utils.async_utils import safe_ensure_future
 class IdexExchange(ExchangeBase):
 
     def __init__(self,
-                 idex_com_api_key: str,
-                 idex_com_secret_key: str,
+                 idex_api_key: str,
+                 idex_api_secret_key: str,
                  trading_pairs: Optional[List[str]] = None,
                  trading_required: bool = True):
         """
@@ -28,7 +28,7 @@ class IdexExchange(ExchangeBase):
         """
         super().__init__()
         self._trading_required = trading_required
-        self._idex_auth: IdexAuth = IdexAuth(idex_com_api_key, idex_com_secret_key)
+        self._idex_auth: IdexAuth = IdexAuth(idex_api_key, idex_api_secret_key)
         self._client: AsyncIdexClient = AsyncIdexClient(auth=self._idex_auth)
         self._order_book_tracker = IdexOrderBookTracker(trading_pairs=trading_pairs)
         # TODO: self._user_stream_tracker = idexComUserStreamTracker(self._idex_com_auth, trading_pairs)
@@ -125,3 +125,25 @@ class IdexExchange(ExchangeBase):
 
     def stop_tracking_order(self, order_id: str):
         pass
+
+    _account_available_balances = None
+    _account_balances = None
+
+    async def _update_balances(self):
+        self._account_available_balances = self._account_available_balances or {}
+        self._account_balances = self._account_balances or {}
+        balances_available = {}
+        balances = {}
+        wallets = await self._client.user.wallets()
+        for wallet in wallets:
+            accounts = await self._client.user.balances(wallet.address)
+            for account in accounts:
+                # Set available balance
+                balances_available.setdefault(wallet, {})
+                balances_available[wallet][account.asset] = Decimal(account.availableForTrade)
+                # Set balance
+                balances.setdefault(wallet, {})
+                balances[wallet][account.asset] = Decimal(account.quantity)
+
+        self._account_available_balances = balances_available
+        self._account_balances = balances

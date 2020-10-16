@@ -15,9 +15,9 @@ KEYS = {
                   required_if=using_exchange("idex"),
                   is_secure=True,
                   is_connect_key=True),
-    "idex_api_secret":
-        ConfigVar(key="idex_api_secret",
-                  prompt="Enter your IDEX API secret >>> ",
+    "idex_api_secret_key":
+        ConfigVar(key="idex_api_secret_key",
+                  prompt="Enter your IDEX API secret key>>> ",
                   required_if=using_exchange("idex"),
                   is_secure=True,
                   is_connect_key=True),
