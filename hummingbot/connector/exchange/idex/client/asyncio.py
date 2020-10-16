@@ -89,16 +89,44 @@ class AsyncBaseClient:
         if not self.session:
             self.session = ClientSession()
 
+    async def get_auth_token(self, auth: IdexAuth, wallet: str) -> typing.Optional[str]:
+        endpoint = settings.rest_api_url.rstrip("/")
+        signed_request = auth.generate_auth_dict_for_get(f"{endpoint}/wsToken", params={
+            "wallet": wallet
+        })
+        resp = await self.session.get(url=signed_request["url"])
+        result = await resp.json()
+        if resp.status != 200 or not isinstance(result, dict):
+            raise RemoteApiError(
+                code="Undefined error",
+                message=str(result)
+            )
+        if "token" in result:
+            return result["token"]
+        if "code" not in result:
+            raise RemoteApiError(
+                code=result["code"],
+                message=result["message"]
+            )
+
     async def subscribe(self,
                         subscriptions: typing.List[typing.Union[str, typing.Dict]] = None,
                         markets: typing.List[str] = None,
                         method: str = "subscribe",
-                        message_cls: typing.Type = None):
+                        message_cls: typing.Type = None,
+                        auth: IdexAuth = None,
+                        wallet: str = None):
         url = settings.ws_api_url
         async with self.session.ws_connect(url) as ws:
             subscription_request = {
-                "method": method,
+                "method": method
             }
+            token = await self.get_auth_token(auth, wallet) if auth and wallet else None
+            if token:
+                subscription_request.update({
+                    "token": token
+                })
+
             if markets:
                 subscription_request.update({
                     "markets": markets
