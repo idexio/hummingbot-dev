@@ -108,9 +108,9 @@ class RestRequestAllOrderParameters:
     NOTE: Is not documented
     """
     wallet: str
-    market: str
-    type: OrderType
-    side: OrderSide
+    market: typing.Optional[str] = None
+    type: typing.Optional[OrderType] = None
+    side: typing.Optional[OrderSide] = None
     nonce: typing.Optional[str] = None
     quantity: typing.Optional[str] = None
     quoteOrderQuantity: typing.Optional[str] = None
