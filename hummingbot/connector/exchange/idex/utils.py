@@ -10,6 +10,9 @@ from hummingbot.core.event.events import OrderType
 from .client.asyncio import AsyncIdexClient
 
 
+EXCHANGE_NAME = "idex"
+
+
 def no_arg_cache(f=None, *, for_seconds=30):
     def decorator(f):
         @functools.wraps(f)

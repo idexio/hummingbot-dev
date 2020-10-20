@@ -1,19 +1,28 @@
 import asyncio
+import pandas as pd
 
+from dataclasses import asdict
 from decimal import Decimal
-from typing import Optional, List
-
-from hummingbot.connector.exchange.idex.client.asyncio import AsyncIdexClient
-from hummingbot.connector.exchange.idex.idex_auth import IdexAuth
-from hummingbot.connector.exchange.idex.idex_order_book_tracker import IdexOrderBookTracker
-from hummingbot.connector.exchange.idex.types.rest.request import RestRequestCancelOrder, RestRequestOrder, OrderSide
-from hummingbot.connector.exchange.idex.utils import to_idex_pair, to_idex_order_type, create_id
+from typing import Optional, List, Dict, Any
 from hummingbot.connector.exchange_base import ExchangeBase, s_decimal_NaN
-from hummingbot.core.event.events import OrderType, TradeType
+from hummingbot.connector.in_flight_order_base import InFlightOrderBase
+from hummingbot.core.data_type.limit_order import LimitOrder
+from hummingbot.core.data_type.order_book import OrderBook
+from hummingbot.core.event.events import OrderType, TradeType, TradeFee
+from hummingbot.core.network_base import NetworkStatus
 from hummingbot.core.utils.async_utils import safe_ensure_future
+from hummingbot.core.utils.estimate_fee import estimate_fee
+
+from .client.asyncio import AsyncIdexClient
+from .idex_auth import IdexAuth
+from .idex_order_book_tracker import IdexOrderBookTracker
+from .types.rest.request import RestRequestCancelOrder, RestRequestOrder, OrderSide
+from .utils import to_idex_pair, to_idex_order_type, create_id, EXCHANGE_NAME
 
 
 class IdexExchange(ExchangeBase):
+
+    name: str = EXCHANGE_NAME
 
     def __init__(self,
                  idex_api_key: str,
@@ -45,14 +54,36 @@ class IdexExchange(ExchangeBase):
         self._last_poll_timestamp = 0
 
     @property
-    def order_books(self):
-        pass
+    def tracking_states(self) -> Dict[str, any]:
+        """
+        :return active in-flight orders in json format, is used to save in sqlite db.
+        """
+        return {
+            key: value.to_json()
+            for key, value in self._in_flight_orders.items()
+            if not value.is_done
+        }
+
+    def supported_order_types(self) -> List[OrderType]:
+        # TODO: Validate
+        return [OrderType.MARKET, OrderType.LIMIT, OrderType.LIMIT_MAKER]
 
     @property
-    def limit_orders(self):
-        pass
+    def order_books(self) -> Dict[str, OrderBook]:
+        return self._order_book_tracker.order_books
 
-    async def get_active_exchange_markets(self):
+    @property
+    def limit_orders(self) -> List[LimitOrder]:
+        """
+        TODO: Validate
+
+        """
+        return [
+            in_flight_order.to_limit_order()
+            for in_flight_order in self._in_flight_orders.values()
+        ]
+
+    async def get_active_exchange_markets(self) -> pd.DataFrame:
         pass
 
     def c_stop_tracking_order(self, order_id):
@@ -101,30 +132,67 @@ class IdexExchange(ExchangeBase):
             market=market
         ))
 
-    def get_order_book(self, trading_pair: str):
-        pass
+    async def get_order(self, client_order_id: str) -> Dict[str, Any]:
+        order = self._in_flight_orders.get(client_order_id)
+        exchange_order_id = await order.get_exchange_order_id()
+        orders = await self._client.trade.get_order(orderId=exchange_order_id)
+        return [asdict(order) for order in orders] if isinstance(orders, list) else asdict(orders)
 
-    def get_fee(self, base_currency: str, quote_currency: str, order_type: OrderType, order_side: TradeType,
-                amount: Decimal, price: Decimal = s_decimal_NaN):
-        pass
+    def get_order_book(self, trading_pair: str) -> OrderBook:
+        if trading_pair not in self._order_book_tracker.order_books:
+            raise ValueError(f"No order book exists for '{trading_pair}'.")
+        return self._order_book_tracker.order_books[trading_pair]
+
+    async def check_network(self) -> NetworkStatus:
+        try:
+            result = await self._client.public.get_ping()
+            assert result == {}
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            return NetworkStatus.NOT_CONNECTED
+        return NetworkStatus.CONNECTED
+
+    async def start_network(self):
+        await self.stop_network()
+        self._order_book_tracker.start()
+
+    async def stop_network(self):
+        self._order_book_tracker.stop()
+
+    def get_fee(self,
+                base_currency: str,
+                quote_currency: str,
+                order_type: OrderType,
+                order_side: TradeType,
+                amount: Decimal,
+                price: Decimal = s_decimal_NaN) -> TradeFee:
+        return estimate_fee(EXCHANGE_NAME, order_type == TradeType.BUY)
 
     @property
-    def status_dict(self):
-        pass
+    def status_dict(self) -> Dict[str, bool]:
+        return {
+            "order_books_initialized": self._order_book_tracker.ready,
+            "account_balance": len(self._account_balances) > 0 if self._trading_required else True,
+            "trading_rule_initialized": len(self._trading_rules) > 0,
+            "user_stream_initialized":
+                self._user_stream_tracker.data_source.last_recv_time > 0 if self._trading_required else True,
+        }
 
     @property
-    def ready(self):
-        pass
+    def ready(self) -> bool:
+        return all(self.status_dict.values())
 
     @property
-    def in_flight_orders(self):
-        pass
+    def in_flight_orders(self)  -> Dict[str, InFlightOrderBase]:
+        return self._in_flight_orders
 
     async def cancel_all(self, timeout_seconds: float):
         pass
 
     def stop_tracking_order(self, order_id: str):
-        pass
+        if order_id in self._in_flight_orders:
+            del self._in_flight_orders[order_id]
 
     _account_available_balances = None
     _account_balances = None

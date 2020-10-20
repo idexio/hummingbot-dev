@@ -1,31 +1,25 @@
-#!/usr/bin/env python
-
 import asyncio
-from collections import deque, defaultdict
 import logging
 import time
-from typing import (
-    Deque,
-    Dict,
-    List,
-    Optional
-)
 
+from collections import deque, defaultdict
+from typing import Deque, Dict, List, Optional
 from hummingbot.logger import HummingbotLogger
 from hummingbot.core.data_type.order_book_tracker import OrderBookTracker
-from hummingbot.connector.exchange.idex.idex_api_order_book_data_source import IdexAPIOrderBookDataSource
 from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.core.data_type.order_book_message import OrderBookMessage, OrderBookMessageType
 
+from .idex_api_order_book_data_source import IdexAPIOrderBookDataSource
+from .utils import EXCHANGE_NAME
+
 
 class IdexOrderBookTracker(OrderBookTracker):
-    _bobt_logger: Optional[HummingbotLogger] = None
+    _idex_logger: Optional[HummingbotLogger] = None
 
     @classmethod
     def logger(cls) -> HummingbotLogger:
-        if cls._bobt_logger is None:
-            cls._bobt_logger = logging.getLogger(__name__)
-        return cls._bobt_logger
+        cls._idex_logger = cls._idex_logger or logging.getLogger(__name__)
+        return cls._idex_logger
 
     def __init__(self,
                  trading_pairs: Optional[List[str]] = None):
@@ -40,7 +34,7 @@ class IdexOrderBookTracker(OrderBookTracker):
 
     @property
     def exchange_name(self) -> str:
-        return "idex"
+        return EXCHANGE_NAME
 
     async def _order_book_diff_router(self):
         """
@@ -104,14 +98,8 @@ class IdexOrderBookTracker(OrderBookTracker):
 
         while True:
             try:
-                message: OrderBookMessage = None
-                saved_messages: Deque[OrderBookMessage] = self._saved_message_queues[trading_pair]
-
-                # Process saved messages first if there are any
-                if len(saved_messages) > 0:
-                    message = saved_messages.popleft()
-                else:
-                    message = await message_queue.get()
+                saved_messages = self._saved_message_queues[trading_pair]
+                message = saved_messages.popleft() if len(saved_messages) else (await message_queue.get())
 
                 if message.type is OrderBookMessageType.DIFF:
                     order_book.apply_diffs(message.bids, message.asks, message.update_id)
