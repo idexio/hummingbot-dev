@@ -116,6 +116,9 @@ class AsyncBaseClient:
                         message_cls: typing.Type = None,
                         auth: IdexAuth = None,
                         wallet: str = None):
+        """
+        TODO: explicit disconnect method
+        """
         url = settings.ws_api_url
         async with self.session.ws_connect(url) as ws:
             subscription_request = {
@@ -302,6 +305,12 @@ class Trade(EndpointGroup):
     @rest.signed.post("orders", request.RestRequestCreateOrderBody, response.RestResponseOrder)
     async def create_order(self,
                            parameters: request.RestRequestOrder) -> response.RestResponseOrder:
+        pass
+
+    @rest.signed.get("orders", request.RestRequestFindOrder, response.RestResponseOrder)
+    async def get_order(self,
+                        orderId: str) -> typing.Union[typing.List[response.RestResponseOrder],
+                                                      response.RestResponseOrder]:
         pass
 
     @rest.signed.delete("orders", request.RestRequestCancelOrdersBody, response.RestResponseCanceledOrderItem)
