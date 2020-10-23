@@ -149,7 +149,7 @@ class AsyncBaseClient:
                         WSMsgType.ERROR):
                     break
                 message = message.json()
-                print(f"SUBRESP: {message}")
+                print(f"MSG: from {subscription_request} - {message}")
                 if message_cls and isinstance(message, dict):
                     message = message_cls(**message)
                 yield message
@@ -185,16 +185,16 @@ class AsyncBaseClient:
             url = signed_payload["url"]
             headers = signed_payload["headers"]
             body = signed_payload.get("body")
-        elif method == "get":
+        elif method == "get" and data:
             url = f"{url}?{urlencode(data)}"
         else:
             body = json.dumps(data)
 
         # TODO: Move to logging
-        print(f"{method.upper()}: {url} with {body}")
+        print(f"REST {method.upper()}: {url} with {body}")
         async with self.session as session:
             resp = await session.request(
-                method, url, headers=headers, body=body
+                method, url, headers=headers, data=body
             )
             if resp.status != 200:
                 raise RemoteApiError(

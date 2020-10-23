@@ -1,6 +1,7 @@
 import functools
 import re
 import time
+import traceback
 import typing
 import uuid
 
@@ -13,7 +14,7 @@ from .client.asyncio import AsyncIdexClient
 EXCHANGE_NAME = "idex"
 
 
-def no_arg_cache(f=None, *, for_seconds=30):
+def no_arg_cache(_f=None, *, for_seconds=30):
     def decorator(f):
         @functools.wraps(f)
         async def wrapper():
@@ -24,8 +25,8 @@ def no_arg_cache(f=None, *, for_seconds=30):
                 setattr(f, "_result", (result, now))
             return result
         return wrapper
-    if f:
-        return decorator(f)
+    if _f:
+        return decorator(_f)
     return decorator
 
 
@@ -37,18 +38,15 @@ async def get_assets() -> typing.List[str]:
 @no_arg_cache
 async def get_trading_pair_splitter() -> typing.Pattern:
     pairs = await get_assets()
-    return re.compile(rf"^(\w+)({'|'.join(pairs)})$")
+    return re.compile(rf"^(\w+)-?({'|'.join(pairs)})$")
 
 
 async def to_idex_pair(pair: str) -> Optional[str]:
-    try:
-        pattern = await get_trading_pair_splitter()
-        matcher = pattern.match(pair)
+    pattern = await get_trading_pair_splitter()
+    matcher = pattern.match(pair)
+    if matcher:
         return f"{matcher.group(1)}-{matcher.group(2)}"
-    # TODO: What the ... is that below?
-    # Exceptions are now logged as warnings in trading pair fetcher
-    except Exception:
-        return None
+    return None
 
 
 IDEX_ORDER_TYPE_MAP = {

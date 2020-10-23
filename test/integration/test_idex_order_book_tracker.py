@@ -2,12 +2,17 @@
 import math
 import asyncio
 import logging
+import time
 import unittest
 
 from os.path import join, realpath
 import sys;
 
+from hummingbot.connector.exchange.binance.binance_exchange import BinanceExchange
+from hummingbot.connector.exchange.idex import conf
+from hummingbot.connector.exchange.idex.idex_exchange import IdexExchange
 from hummingbot.connector.exchange.idex.idex_order_book_tracker import IdexOrderBookTracker
+from hummingbot.core.data_type.order_book_message import OrderBookMessage, OrderBookMessageType
 
 sys.path.insert(0, realpath(join(__file__, "../../../")))
 
@@ -21,6 +26,11 @@ from hummingbot.core.utils.async_utils import (
     safe_ensure_future,
     safe_gather,
 )
+
+
+# API_MOCK_ENABLED = conf.mock_api_enabled is not None and conf.mock_api_enabled.lower() in ['true', 'yes', '1']
+# API_KEY = "XXX" if API_MOCK_ENABLED else conf.idex_api_key
+# API_SECRET = "YYY" if API_MOCK_ENABLED else conf.idex_api_secret
 
 
 class IdexOrderBookTrackerUnitTest(unittest.TestCase):
@@ -41,15 +51,29 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
             trading_pairs=cls.trading_pairs
         )
         cls.order_book_tracker_task: asyncio.Task = safe_ensure_future(cls.order_book_tracker.start())
+        cls._publish_event()
         cls.ev_loop.run_until_complete(cls.wait_til_tracker_ready())
 
     @classmethod
     async def wait_til_tracker_ready(cls):
         while True:
             if len(cls.order_book_tracker.order_books) > 0:
-                print("TEST: Initialized real-time order books.")
                 return
             await asyncio.sleep(1)
+
+    @classmethod
+    def _publish_event(cls):
+        order_book_message = OrderBookMessage(OrderBookMessageType.TRADE, {
+            "trading_pair": "DIL-ETH",
+            "update_id": "123",
+            "bids": [
+                [1, 1]
+            ],
+            "asks": [
+                [1, 1]
+            ]
+        }, timestamp=time.time())
+        cls.ev_loop.run_until_complete(cls.order_book_tracker._order_book_trade_stream.put(order_book_message))
 
     async def run_parallel_async(self, *tasks):
         future: asyncio.Future = safe_ensure_future(safe_gather(*tasks))
@@ -64,28 +88,20 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
         self.event_logger = EventLogger()
         for event_tag in self.events:
             for trading_pair, order_book in self.order_book_tracker.order_books.items():
-                print(f"SETUP: {locals()}")
                 order_book.add_listener(event_tag, self.event_logger)
 
     def test_order_book_trade_event_emission(self):
-        """
-        Test if order book tracker is able to retrieve order book trade message from exchange and
-        emit order book trade events after correctly parsing the trade messages
-        """
-        print("#1")
         self.run_parallel(self.event_logger.wait_for(OrderBookTradeEvent))
-        print("#2")
         for ob_trade_event in self.event_logger.event_log:
-            print(f"ob_trade_event: {ob_trade_event}")
-            # self.assertTrue(type(ob_trade_event) == OrderBookTradeEvent)
-            # self.assertTrue(ob_trade_event.trading_pair in self.trading_pairs)
-            # self.assertTrue(type(ob_trade_event.timestamp) == float)
-            # self.assertTrue(type(ob_trade_event.amount) == float)
-            # self.assertTrue(type(ob_trade_event.price) == float)
-            # self.assertTrue(type(ob_trade_event.type) == TradeType)
-            # self.assertTrue(math.ceil(math.log10(ob_trade_event.timestamp)) == 10)
-            # self.assertTrue(ob_trade_event.amount > 0)
-            # self.assertTrue(ob_trade_event.price > 0)
+            self.assertTrue(type(ob_trade_event) == OrderBookTradeEvent)
+            self.assertTrue(ob_trade_event.trading_pair in self.trading_pairs)
+            self.assertTrue(type(ob_trade_event.timestamp) == float)
+            self.assertTrue(type(ob_trade_event.amount) == float)
+            self.assertTrue(type(ob_trade_event.price) == float)
+            self.assertTrue(type(ob_trade_event.type) == TradeType)
+            self.assertTrue(math.ceil(math.log10(ob_trade_event.timestamp)) == 10)
+            self.assertTrue(ob_trade_event.amount > 0)
+            self.assertTrue(ob_trade_event.price > 0)
 
     # def test_tracker_integrity(self):
     #     pass

@@ -21,9 +21,8 @@ class IdexOrderBookTracker(OrderBookTracker):
         cls._idex_logger = cls._idex_logger or logging.getLogger(__name__)
         return cls._idex_logger
 
-    def __init__(self,
-                 trading_pairs: Optional[List[str]] = None):
-        super().__init__(
+    def __init__(self, trading_pairs: Optional[List[str]] = None):
+        super(IdexOrderBookTracker, self).__init__(
             data_source=IdexAPIOrderBookDataSource(trading_pairs=trading_pairs),
             trading_pairs=trading_pairs
         )
