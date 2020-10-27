@@ -1,3 +1,4 @@
+import logging
 import time
 import asyncio
 import aiohttp
@@ -9,6 +10,7 @@ from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.core.data_type.order_book_message import OrderBookMessage, OrderBookMessageType
 from hummingbot.core.utils.async_utils import safe_gather
 from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
+from hummingbot.logger import HummingbotLogger
 
 from .client.asyncio import AsyncIdexClient
 from .utils import to_idex_pair
@@ -16,6 +18,12 @@ from .types.websocket.response import WebSocketResponseL2OrderBookShort, WebSock
 
 
 class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
+
+    @classmethod
+    def logger(cls) -> HummingbotLogger:
+        if cls._logger is None:
+            cls._logger = logging.getLogger(__name__)
+        return cls._logger
 
     @classmethod
     async def _get_last_traded_price(cls, pair: str) -> float:
