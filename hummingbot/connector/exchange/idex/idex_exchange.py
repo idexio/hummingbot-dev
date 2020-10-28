@@ -115,6 +115,7 @@ class IdexExchange(ExchangeBase):
         """
         :return: data frame with trading_pair as index, and at least the following columns --
                  ["baseAsset", "quoteAsset", "volume", "USDVolume"]
+        TODO: Validate that this method actually needed
         TODO: How to get USDVolume
         """
         pass
@@ -150,6 +151,20 @@ class IdexExchange(ExchangeBase):
                 side=side
             )
         )
+
+    def get_order_price_quantum(self, trading_pair: str, price: Decimal) -> Decimal:
+        return Decimal(0.00000001)
+
+    def get_order_size_quantum(self, trading_pair: str, order_size: Decimal) -> Decimal:
+        return Decimal(0.00000001)
+
+    def quantize_order_price(self, trading_pair: str, price: Decimal) -> Decimal:
+        # TODO: ?
+        return Decimal(0.00000001)
+
+    def quantize_order_amount(self, trading_pair: str, amount: Decimal) -> Decimal:
+        # TODO: ?
+        return Decimal(0.00000001)
 
     def start_tracking_order(self,
                              order_id: str,

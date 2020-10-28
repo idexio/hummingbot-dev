@@ -78,10 +78,11 @@ class IdexInFlightOrder(InFlightOrderBase):
         )
 
         # TODO: How to normalize fills array
+        # TODO: Take gas into account, just add together
         # result.executed_amount_base = Decimal(data["executed_amount_base"])
         # result.executed_amount_quote = Decimal(data["executed_amount_quote"])
-        # result.fee_asset = data["fee_asset"]
-        # result.fee_paid = Decimal(data["fee_paid"])
+        # result.fee_asset = data["fee_asset"] # Asset is always same
+        # result.fee_paid = Decimal(data["fee_paid"]) # Sum it
         # result.last_state = data["last_state"]
         return result
 

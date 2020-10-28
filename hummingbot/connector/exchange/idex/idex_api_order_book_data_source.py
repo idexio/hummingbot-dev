@@ -41,15 +41,6 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
         results = await safe_gather(*tasks)
         return {pair: result for pair, result in zip(trading_pairs, results) if result}
 
-    @staticmethod
-    async def get_snapshot(
-            client: aiohttp.ClientSession = None,
-            trading_pair: str = None, limit: int = 1000) -> Dict[str, Any]:
-        """
-        TODO: Verify do we actually need to preserve Interface described in Dev Manual
-        """
-        raise NotImplementedError()
-
     async def get_new_order_book(self, trading_pair: str) -> OrderBook:
         client = AsyncIdexClient()
         snapshot = await client.market.get_orderbook(
@@ -83,7 +74,6 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                     if not isinstance(message, WebSocketResponseL2OrderBookShort):
                         continue
                     timestamp = message.t
-                    # TODO: Verify message
                     order_book_message = OrderBookMessage(OrderBookMessageType.DIFF, {
                         "trading_pair": message.m,
                         "update_id": message.u,
@@ -151,10 +141,10 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                     trade_message = OrderBookMessage(OrderBookMessageType.TRADE, {
                         "trading_pair": message.m,
                         "trade_type": from_idex_trade_type(message.s),
-                        "trade_id": message.i,  # TODO: check i and u
+                        "trade_id": message.i,
                         "update_id": message.u,
                         "price": message.p,
-                        "amount": message.q  # TODO: check against Q
+                        "amount": message.q
                     }, timestamp=timestamp * 1e-3)
                     output.put_nowait(trade_message)
             except asyncio.CancelledError:

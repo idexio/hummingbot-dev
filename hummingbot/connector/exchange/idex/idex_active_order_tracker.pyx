@@ -37,10 +37,14 @@ cdef class IdexActiveOrderTracker:
         return self._active_bids
 
     # TODO: research this more
+    # TODO: See L2 Order Book
+    # SEE: Another implementations
     def volume_for_ask_price(self, price) -> float:
         return NotImplementedError
 
     # TODO: research this more
+    # TODO: See L2 Order Book
+    # SEE: Another implementations
     def volume_for_bid_price(self, price) -> float:
         return NotImplementedError
 
