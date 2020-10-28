@@ -4,17 +4,23 @@ import pandas as pd
 from dataclasses import asdict
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
+
+from async_timeout import timeout
+
 from hummingbot.connector.exchange_base import ExchangeBase, s_decimal_NaN
 from hummingbot.connector.in_flight_order_base import InFlightOrderBase
+from hummingbot.core.clock import Clock
+from hummingbot.core.data_type.cancellation_result import CancellationResult
 from hummingbot.core.data_type.limit_order import LimitOrder
 from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.core.event.events import OrderType, TradeType, TradeFee
 from hummingbot.core.network_base import NetworkStatus
-from hummingbot.core.utils.async_utils import safe_ensure_future
+from hummingbot.core.utils.async_utils import safe_ensure_future, safe_gather
 from hummingbot.core.utils.estimate_fee import estimate_fee
 
 from .client.asyncio import AsyncIdexClient
 from .idex_auth import IdexAuth
+from .idex_in_flight_order import IdexInFlightOrder
 from .idex_order_book_tracker import IdexOrderBookTracker
 from .types.rest.request import RestRequestCancelOrder, RestRequestOrder, OrderSide
 from .utils import to_idex_pair, to_idex_order_type, create_id, EXCHANGE_NAME
@@ -65,8 +71,31 @@ class IdexExchange(ExchangeBase):
         }
 
     def supported_order_types(self) -> List[OrderType]:
-        # TODO: Validate
+        # TODO: Validate against
+        """
+        0	Market
+        1	Limit
+        2	Limit maker
+        3	Stop loss
+        4	Stop loss limit
+        5	Take profit
+        6	Take profit limit
+        :return:
+        """
+
         return [OrderType.MARKET, OrderType.LIMIT, OrderType.LIMIT_MAKER]
+
+    def start(self, clock: Clock, timestamp: float):
+        """
+        This function is called automatically by the clock.
+        """
+        super().start(clock, timestamp)
+
+    def stop(self, clock: Clock):
+        """
+        This function is called automatically by the clock.
+        """
+        super().stop(clock)
 
     @property
     def order_books(self) -> Dict[str, OrderBook]:
@@ -84,9 +113,12 @@ class IdexExchange(ExchangeBase):
         ]
 
     async def get_active_exchange_markets(self) -> pd.DataFrame:
-        pass
+        """
+        :return: data frame with trading_pair as index, and at least the following columns --
+                 ["baseAsset", "quoteAsset", "volume", "USDVolume"]
 
-    def c_stop_tracking_order(self, order_id):
+        TODO: How to get USDVolume
+        """
         pass
 
     def buy(self, trading_pair: str, amount: Decimal, order_type=OrderType.MARKET, price: Decimal = s_decimal_NaN,
@@ -119,6 +151,27 @@ class IdexExchange(ExchangeBase):
                 price=str(price),
                 side=side
             )
+        )
+
+    def start_tracking_order(self,
+                             order_id: str,
+                             exchange_order_id: str,
+                             trading_pair: str,
+                             trade_type: TradeType,
+                             price: Decimal,
+                             amount: Decimal,
+                             order_type: OrderType):
+        """
+        Starts tracking an order by simply adding it into _in_flight_orders dictionary.
+        """
+        self._in_flight_orders[order_id] = IdexInFlightOrder(
+            client_order_id=order_id,
+            exchange_order_id=exchange_order_id,
+            trading_pair=trading_pair,
+            order_type=order_type,
+            trade_type=trade_type,
+            price=price,
+            amount=amount
         )
 
     def cancel(self, trading_pair: str, client_order_id: str):
@@ -154,6 +207,10 @@ class IdexExchange(ExchangeBase):
         return NetworkStatus.CONNECTED
 
     async def start_network(self):
+        """
+        TODO: _status_polling_loop
+        :return:
+        """
         await self.stop_network()
         self._order_book_tracker.start()
 
@@ -188,7 +245,33 @@ class IdexExchange(ExchangeBase):
         return self._in_flight_orders
 
     async def cancel_all(self, timeout_seconds: float):
-        pass
+        """
+                Cancels all in-flight orders and waits for cancellation results.
+                Used by bot's top level stop and exit commands (cancelling outstanding orders on exit)
+                :param timeout_seconds: The timeout at which the operation will be canceled.
+                :returns List of CancellationResult which indicates whether each order is successfully cancelled.
+                """
+        incomplete_orders = [o for o in self._in_flight_orders.values() if not o.is_done]
+        tasks = [self._execute_cancel(o.trading_pair, o.client_order_id, True) for o in incomplete_orders]
+        order_id_set = set([o.client_order_id for o in incomplete_orders])
+        successful_cancellations = []
+        try:
+            async with timeout(timeout_seconds):
+                results = await safe_gather(*tasks, return_exceptions=True)
+                for result in results:
+                    if result is not None and not isinstance(result, Exception):
+                        order_id_set.remove(result)
+                        successful_cancellations.append(CancellationResult(result, True))
+        except Exception:
+            self.logger().error("Cancel all failed.", exc_info=True)
+            self.logger().network(
+                "Unexpected error cancelling orders.",
+                exc_info=True,
+                app_warning_msg="Failed to cancel order on Crypto.com. Check API key and network connection."
+            )
+
+        failed_cancellations = [CancellationResult(oid, False) for oid in order_id_set]
+        return successful_cancellations + failed_cancellations
 
     def stop_tracking_order(self, order_id: str):
         if order_id in self._in_flight_orders:

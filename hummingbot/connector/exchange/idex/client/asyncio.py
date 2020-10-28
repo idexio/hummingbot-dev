@@ -176,7 +176,7 @@ class AsyncBaseClient:
                 message = message["data"] if "data" in message else message
                 # Make dataclass
                 if cls:
-                    print(f"DCI: {cls.__name__}({message})")
+                    # print(f"DCI: {cls.__name__}({message})")
                     message = cls(**message)
                 yield message
 

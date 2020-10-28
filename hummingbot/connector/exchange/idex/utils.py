@@ -6,7 +6,7 @@ import uuid
 
 from typing import Optional
 
-from hummingbot.core.event.events import OrderType
+from hummingbot.core.event.events import OrderType, TradeType
 from .client.asyncio import AsyncIdexClient
 
 
@@ -53,7 +53,7 @@ async def to_idex_pair(pair: str) -> Optional[str]:
     return None
 
 
-IDEX_ORDER_TYPE_MAP = {
+HB_ORDER_TYPE_MAP = {
     OrderType.MARKET: "market",
     OrderType.LIMIT: "limit",
     OrderType.LIMIT_MAKER: "limitMaker",
@@ -65,7 +65,28 @@ def to_idex_order_type(
             OrderType.MARKET,
             OrderType.LIMIT,
             OrderType.LIMIT_MAKER]):
+    return HB_ORDER_TYPE_MAP[order_type]
+
+
+IDEX_ORDER_TYPE_MAP = {
+    "market": OrderType.MARKET,
+    "limit": OrderType.LIMIT,
+    "limitMaker": OrderType.LIMIT_MAKER,
+}
+
+
+def from_idex_order_type(order_type: str):
     return IDEX_ORDER_TYPE_MAP[order_type]
+
+
+IDEX_TRADE_TYPE_MAP = {
+    "buy": TradeType.BUY,
+    "sell": TradeType.SELL,
+}
+
+
+def from_idex_trade_type(side: str):
+    return IDEX_TRADE_TYPE_MAP[side]
 
 
 def create_id():
