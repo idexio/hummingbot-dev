@@ -13,7 +13,7 @@ from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTr
 from hummingbot.logger import HummingbotLogger
 
 from .client.asyncio import AsyncIdexClient
-from .utils import to_idex_pair, get_markets
+from .utils import to_idex_pair, get_markets, from_idex_trade_type
 from .types.websocket.response import WebSocketResponseL2OrderBookShort, WebSocketResponseTradeShort
 
 
@@ -150,8 +150,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                     timestamp = message.t
                     trade_message = OrderBookMessage(OrderBookMessageType.TRADE, {
                         "trading_pair": message.m,
-                        # "trade_type": float(TradeType.SELL.value) if msg["m"] else float(TradeType.BUY.value),
-                        "trade_type": message.s,  # TODO: convert
+                        "trade_type": from_idex_trade_type(message.s),
                         "trade_id": message.u,  # TODO: check i and u
                         "update_id": message.i,
                         "price": message.p,
