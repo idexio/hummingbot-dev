@@ -1,10 +1,8 @@
 import typing
 
 from dataclasses import dataclass
-
 from ..enums import CandleInterval, OrderSide, OrderTimeInForce, \
     OrderSelfTradePrevention, OrderStateChange, OrderStatus, OrderType, Liquidity, EthTransactionStatus
-
 from .request import WebSocketRequestSubscription
 
 

@@ -8,6 +8,7 @@ import unittest
 from os.path import join, realpath
 import sys
 
+from hummingbot.connector.exchange.idex.idex_api_order_book_data_source import IdexAPIOrderBookDataSource
 from hummingbot.connector.exchange.idex.idex_order_book_tracker import IdexOrderBookTracker
 from hummingbot.core.data_type.order_book_message import OrderBookMessage, OrderBookMessageType
 
@@ -110,9 +111,20 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
                                 dil_eth.get_price(True))
         self.assertLessEqual(dil_eth.get_price_for_volume(False, 10).result_price,
                              dil_eth.get_price(False))
-    #
-    # def test_api_get_last_traded_prices(self):
-    #     pass
+
+    def test_api_get_last_traded_prices(self):
+        """
+        # TODO: Fix 429 error
+        """
+        prices = self.ev_loop.run_until_complete(
+            IdexAPIOrderBookDataSource.get_last_traded_prices(['DIL-ETH', 'PIP-ETH', 'CUR-ETH'])
+        )
+
+        for key, value in prices.items():
+            print(f"{key} last_trade_price: {value}")
+
+        self.assertGreater(prices["DIL-ETH"], 0.05)
+        self.assertLess(prices["PIP-ETH"], 1)
 
 
 def main():
