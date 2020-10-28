@@ -103,7 +103,7 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
 
     def test_tracker_integrity(self):
         # Wait 5 seconds to process some diffs.
-        self.ev_loop.run_until_complete(asyncio.sleep(10.0))
+        self.ev_loop.run_until_complete(asyncio.sleep(30.0))
         order_books: Dict[str, OrderBook] = self.order_book_tracker.order_books
         dil_eth: OrderBook = order_books["DIL-ETH"]
         self.assertIsNot(dil_eth.last_diff_uid, 0)

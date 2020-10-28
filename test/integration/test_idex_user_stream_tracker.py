@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import os
 from os.path import join, realpath
 import sys
 
@@ -28,8 +29,8 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
         cls.ev_loop: asyncio.BaseEventLoop = asyncio.get_event_loop()
         cls.user_stream_tracker: IdexUserStreamTracker = IdexUserStreamTracker(
             idex_auth=IdexAuth(
-                api_key="6cf05cd1-59fa-4027-a80b-78f3007b7658",
-                secret_key="xaerouodJqegM6TZaQjdr4YotPTmPaGb"
+                api_key=os.getenv("IDEX_API_KEY"),
+                secret_key=os.getenv("IDEX_SECRET_KEY")
             )
         )
         cls.user_stream_tracker_task: asyncio.Task = safe_ensure_future(cls.user_stream_tracker.start())

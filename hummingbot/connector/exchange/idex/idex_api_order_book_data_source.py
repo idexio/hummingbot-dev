@@ -151,8 +151,8 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                     trade_message = OrderBookMessage(OrderBookMessageType.TRADE, {
                         "trading_pair": message.m,
                         "trade_type": from_idex_trade_type(message.s),
-                        "trade_id": message.u,  # TODO: check i and u
-                        "update_id": message.i,
+                        "trade_id": message.i,  # TODO: check i and u
+                        "update_id": message.u,
                         "price": message.p,
                         "amount": message.q  # TODO: check against Q
                     }, timestamp=timestamp * 1e-3)
