@@ -37,10 +37,9 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
         try:
             client = AsyncIdexClient()
             async for message in client.subscribe(["orders", "trades", "balances"], auth=self._idex_auth):
+                # Will raise ValueError if message will not able to handle
                 yield message
                 self._last_recv_time = time.time()
-                if message.get("data") is None:
-                    continue
         finally:
             await asyncio.sleep(5)
 

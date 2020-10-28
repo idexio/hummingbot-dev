@@ -4,7 +4,7 @@ import asyncio
 import aiohttp
 import pandas as pd
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.core.data_type.order_book_message import OrderBookMessage, OrderBookMessageType
@@ -13,11 +13,13 @@ from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTr
 from hummingbot.logger import HummingbotLogger
 
 from .client.asyncio import AsyncIdexClient
-from .utils import to_idex_pair
+from .utils import to_idex_pair, get_markets
 from .types.websocket.response import WebSocketResponseL2OrderBookShort, WebSocketResponseTradeShort
 
 
 class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
+
+    _logger: Optional[HummingbotLogger] = None
 
     @classmethod
     def logger(cls) -> HummingbotLogger:
@@ -74,9 +76,12 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
         while True:
             try:
                 client = AsyncIdexClient()
-                async for message in client.subscribe(  # type: WebSocketResponseL2OrderBookShort
+                async for message in client.subscribe(
                         subscriptions=["l2orderbook"],
-                        message_cls=WebSocketResponseL2OrderBookShort):
+                        markets=(await get_markets())):
+                    # Filter all none WebSocketResponseL2OrderBookShort types
+                    if not isinstance(message, WebSocketResponseL2OrderBookShort):
+                        continue
                     timestamp = message.t
                     # TODO: Verify message
                     order_book_message = OrderBookMessage(OrderBookMessageType.DIFF, {
@@ -134,10 +139,14 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
         while True:
             try:
                 client = AsyncIdexClient()
-                async for message in client.subscribe(  # type: WebSocketResponseTradeShort
+                async for message in client.subscribe(
                         subscriptions=["trades"],
-                        markets=[(await to_idex_pair(pair)) for pair in self._trading_pairs],
-                        message_cls=WebSocketResponseTradeShort):
+                        markets=[(await to_idex_pair(pair)) for pair in self._trading_pairs]):
+
+                    # Filter any none WebSocketResponseTradeShort types
+                    if not isinstance(message, WebSocketResponseTradeShort):
+                        continue
+
                     timestamp = message.t
                     trade_message = OrderBookMessage(OrderBookMessageType.TRADE, {
                         "trading_pair": message.m,

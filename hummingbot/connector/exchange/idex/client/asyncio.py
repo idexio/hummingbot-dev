@@ -12,6 +12,7 @@ from ..conf import settings
 from ..idex_auth import IdexAuth
 from ..types.rest import request
 from ..types.rest import response
+from ..types.websocket import response as ws_response
 
 
 def rest_decorator(call,
@@ -79,6 +80,19 @@ def clean_locals(data):
     return {k: v for k, v in data.items() if k != "self"}
 
 
+WEBSOCKET_MESSAGE_TYPES = {
+    # Full response
+    "subscriptions": ws_response.WebSocketResponseSubscriptions,
+
+    # Data response
+    "l2orderbook": ws_response.WebSocketResponseL2OrderBookShort,
+    "error": ws_response.WebSocketResponseErrorData,
+    "trades": ws_response.WebSocketResponseTradeShort,
+    "orders": ws_response.WebSocketResponseOrderShort,
+    "balances": ws_response.WebSocketResponseBalanceShort
+}
+
+
 @dataclass
 class AsyncBaseClient:
 
@@ -139,7 +153,7 @@ class AsyncBaseClient:
                     "subscriptions": subscriptions
                 })
 
-            print(f"SUBREQ: {subscription_request}")
+            print(f"WSS: {subscription_request}")
             await ws.send_json(subscription_request)
             async for message in ws:   # type: WSMessage
                 if message.type in (
@@ -149,9 +163,21 @@ class AsyncBaseClient:
                         WSMsgType.ERROR):
                     break
                 message = message.json()
-                print(f"MSG: from {subscription_request} - {message}")
-                if message_cls and isinstance(message, dict):
-                    message = message_cls(**message)
+                message_type = message.get("type")
+
+                # Get message class
+                # We can always override message via input arg
+                cls = message_cls or (WEBSOCKET_MESSAGE_TYPES.get(message_type) or "Unhandled")
+                print(f"WSM: from {subscription_request}\n   > {cls.__name__}({message})")
+
+                if "type" not in message or message["type"] not in WEBSOCKET_MESSAGE_TYPES:
+                    raise ValueError(f"Unable to handle message {message}")
+                # Get data block
+                message = message["data"] if "data" in message else message
+                # Make dataclass
+                if cls:
+                    print(f"DCI: {cls.__name__}({message})")
+                    message = cls(**message)
                 yield message
 
     async def request(self,
@@ -191,7 +217,11 @@ class AsyncBaseClient:
             body = json.dumps(data)
 
         # TODO: Move to logging
-        print(f"REST {method.upper()}: {url} with {body}")
+        if method.lower() == "get":
+            print(f"{method.upper()}: {url}")
+        else:
+            print(f"{method.upper()}: {url} with {body}")
+
         async with self.session as session:
             resp = await session.request(
                 method, url, headers=headers, data=body

@@ -6,11 +6,8 @@ import time
 import unittest
 
 from os.path import join, realpath
-import sys;
+import sys
 
-from hummingbot.connector.exchange.binance.binance_exchange import BinanceExchange
-from hummingbot.connector.exchange.idex import conf
-from hummingbot.connector.exchange.idex.idex_exchange import IdexExchange
 from hummingbot.connector.exchange.idex.idex_order_book_tracker import IdexOrderBookTracker
 from hummingbot.core.data_type.order_book_message import OrderBookMessage, OrderBookMessageType
 
@@ -103,8 +100,16 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
             self.assertTrue(ob_trade_event.amount > 0)
             self.assertTrue(ob_trade_event.price > 0)
 
-    # def test_tracker_integrity(self):
-    #     pass
+    def test_tracker_integrity(self):
+        # Wait 5 seconds to process some diffs.
+        self.ev_loop.run_until_complete(asyncio.sleep(10.0))
+        order_books: Dict[str, OrderBook] = self.order_book_tracker.order_books
+        dil_eth: OrderBook = order_books["DIL-ETH"]
+        self.assertIsNot(dil_eth.last_diff_uid, 0)
+        self.assertGreaterEqual(dil_eth.get_price_for_volume(True, 10).result_price,
+                                dil_eth.get_price(True))
+        self.assertLessEqual(dil_eth.get_price_for_volume(False, 10).result_price,
+                             dil_eth.get_price(False))
     #
     # def test_api_get_last_traded_prices(self):
     #     pass

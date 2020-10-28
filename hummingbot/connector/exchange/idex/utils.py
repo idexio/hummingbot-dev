@@ -1,7 +1,6 @@
 import functools
 import re
 import time
-import traceback
 import typing
 import uuid
 
@@ -33,6 +32,11 @@ def no_arg_cache(_f=None, *, for_seconds=30):
 @no_arg_cache
 async def get_assets() -> typing.List[str]:
     return [asset.symbol for asset in (await AsyncIdexClient().public.get_assets())]
+
+
+@no_arg_cache
+async def get_markets() -> typing.List[str]:
+    return [item.market for item in (await AsyncIdexClient().public.get_markets())]
 
 
 @no_arg_cache

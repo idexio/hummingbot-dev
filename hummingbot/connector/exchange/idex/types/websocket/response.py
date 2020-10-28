@@ -8,6 +8,7 @@ from ..enums import CandleInterval, OrderSide, OrderTimeInForce, \
 from .request import WebSocketRequestSubscription
 
 
+@dataclass
 class WebSocketResponseTickerShort:
     """
     string m - (market) Market symbol
@@ -42,6 +43,7 @@ class WebSocketResponseTickerShort:
     u: int
 
 
+@dataclass
 class WebSocketResponseCandleShort:
     """
     string m - (market) Market symbol
@@ -128,6 +130,22 @@ class WebSocketResponseL2OrderBookShort:
 
 
 @dataclass
+class WebSocketResponseL2OrderBookLong:
+    """
+    string m - (market) Market symbol
+    number t - (time) Timestamp of the order book update
+    number u - (sequence) Order book update sequence number of the update
+    WebSocketResponseL2OrderBookChange b - (bids) Array of bid price level updates
+    WebSocketResponseL2OrderBookChange a - (asks) Array of ask price level updates
+    """
+    market: str
+    time: float
+    sequence: int
+    bids: typing.List[typing.List]
+    asks: typing.List[typing.List]
+
+
+@dataclass
 class WebSocketResponseBalanceShort:
     """
     string w - (wallet) Target wallet address
@@ -173,8 +191,8 @@ class WebSocketResponseOrderFillShort:
     a: str
     l: Liquidity
     S: EthTransactionStatus
-    g: typing.Optional[str]
-    T: typing.Optional[str]
+    g: typing.Optional[str] = None
+    T: typing.Optional[str] = None
 
 
 @dataclass
@@ -212,17 +230,17 @@ WebSocketResponseOrderFillShort] [F] - (fills) Array of order fill objects
     o: OrderType
     S: OrderSide
     z: str
-    c: typing.Optional[str]
-    u: typing.Optional[int]
-    q: typing.Optional[str]
-    Q: typing.Optional[str]
-    Z: typing.Optional[str]
-    v: typing.Optional[str]
-    p: typing.Optional[str]
-    P: typing.Optional[str]
-    f: typing.Optional[OrderTimeInForce]
-    V: typing.Optional[OrderSelfTradePrevention]
-    F: typing.Optional[typing.List[WebSocketResponseOrderFillShort]]
+    c: typing.Optional[str] = None
+    u: typing.Optional[int] = None
+    q: typing.Optional[str] = None
+    Q: typing.Optional[str] = None
+    Z: typing.Optional[str] = None
+    v: typing.Optional[str] = None
+    p: typing.Optional[str] = None
+    P: typing.Optional[str] = None
+    f: typing.Optional[OrderTimeInForce] = None
+    V: typing.Optional[OrderSelfTradePrevention] = None
+    F: typing.Optional[typing.List[WebSocketResponseOrderFillShort]] = None
 
 
 @dataclass
@@ -242,9 +260,10 @@ class WebSocketResponseError:
     """
     type: typing.Literal["error"]
     data: WebSocketResponseErrorData
-    cid: typing.Optional[str]
+    cid: typing.Optional[str] = None
 
 
+@dataclass
 class WebSocketResponseSubscriptions:
     """
     string [cid]
@@ -257,4 +276,4 @@ class WebSocketResponseSubscriptions:
     """
     type: typing.Literal['subscriptions']
     subscriptions: typing.List[WebSocketRequestSubscription]
-    cid: typing.Optional[str]
+    cid: typing.Optional[str] = None
