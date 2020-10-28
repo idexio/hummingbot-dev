@@ -22,6 +22,7 @@ from .client.asyncio import AsyncIdexClient
 from .idex_auth import IdexAuth
 from .idex_in_flight_order import IdexInFlightOrder
 from .idex_order_book_tracker import IdexOrderBookTracker
+from .idex_user_stream_tracker import IdexUserStreamTracker
 from .types.rest.request import RestRequestCancelOrder, RestRequestOrder, OrderSide
 from .utils import to_idex_pair, to_idex_order_type, create_id, EXCHANGE_NAME
 
@@ -46,7 +47,7 @@ class IdexExchange(ExchangeBase):
         self._idex_auth: IdexAuth = IdexAuth(idex_api_key, idex_api_secret_key)
         self._client: AsyncIdexClient = AsyncIdexClient(auth=self._idex_auth)
         self._order_book_tracker = IdexOrderBookTracker(trading_pairs=trading_pairs)
-        # TODO: self._user_stream_tracker = idexComUserStreamTracker(self._idex_com_auth, trading_pairs)
+        self._user_stream_tracker = IdexUserStreamTracker(self._idex_com_auth, trading_pairs)
         self._ev_loop = asyncio.get_event_loop()
         self._shared_client = None
         self._poll_notifier = asyncio.Event()
@@ -82,7 +83,6 @@ class IdexExchange(ExchangeBase):
         6	Take profit limit
         :return:
         """
-
         return [OrderType.MARKET, OrderType.LIMIT, OrderType.LIMIT_MAKER]
 
     def start(self, clock: Clock, timestamp: float):
@@ -105,7 +105,6 @@ class IdexExchange(ExchangeBase):
     def limit_orders(self) -> List[LimitOrder]:
         """
         TODO: Validate
-
         """
         return [
             in_flight_order.to_limit_order()
@@ -116,7 +115,6 @@ class IdexExchange(ExchangeBase):
         """
         :return: data frame with trading_pair as index, and at least the following columns --
                  ["baseAsset", "quoteAsset", "volume", "USDVolume"]
-
         TODO: How to get USDVolume
         """
         pass
