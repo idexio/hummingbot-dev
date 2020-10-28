@@ -158,14 +158,6 @@ class IdexExchange(ExchangeBase):
     def get_order_size_quantum(self, trading_pair: str, order_size: Decimal) -> Decimal:
         return Decimal(0.00000001)
 
-    def quantize_order_price(self, trading_pair: str, price: Decimal) -> Decimal:
-        # TODO: ?
-        return Decimal(0.00000001)
-
-    def quantize_order_amount(self, trading_pair: str, amount: Decimal) -> Decimal:
-        # TODO: ?
-        return Decimal(0.00000001)
-
     def start_tracking_order(self,
                              order_id: str,
                              exchange_order_id: str,
