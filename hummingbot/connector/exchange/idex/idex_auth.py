@@ -1,10 +1,18 @@
 import json
 import hmac
+import string
 import uuid
 import hashlib
+from decimal import Decimal
 
 from typing import Dict, Union
 from urllib.parse import urlencode
+
+from eth_account import Account
+from eth_account.messages import SignableMessage, encode_defunct
+from web3 import Web3, eth
+
+from hummingbot.core.event.events import OrderType, TradeType
 
 
 class IdexAuth:
@@ -19,6 +27,68 @@ class IdexAuth:
             data.encode("utf-8") if isinstance(data, str) else data,
             hashlib.sha256
         ).hexdigest()
+
+    HEX_DIGITS_SET = set(string.hexdigits)
+
+    @classmethod
+    def arrayif(cls, value: str):
+        # Remove 0x
+        value = value.rsplit("x", 1)[-1]
+        # Filter none hex
+        value = ''.join([c for c in value if c in cls.HEX_DIGITS_SET])
+        # Split by 2
+        value = [value[i:i + 2] for i in range(0, len(value), 2)]
+        # Convert to array
+        return list(map(lambda v: int(v, 16), value))
+
+    @classmethod
+    def hex_to_uint128(cls, value):
+        # Remove 0x
+        value = value.rsplit("x", 1)[-1]
+        # Filter none hex
+        value = ''.join([c for c in value if c in cls.HEX_DIGITS_SET])
+        return int(value, 16)
+
+    def sign_wallet(self,
+                    nonce: str,
+                    wallet: str,
+                    market: str,
+                    order_type: OrderType,
+                    order_side: TradeType,
+                    order_quantity: str,
+                    order_price: str = None,
+                    order_stop_price: str = None,
+                    order_custom_client_order_id: str = None,
+                    order_time_in_force: int = None,
+                    order_self_trade_trevention: int = None,
+                    private_key: str = None):
+
+        parameters = [
+            ["uint8", 1],
+            ["uint128", self.hex_to_uint128(nonce)],
+            ["address", wallet],
+            ["string", market],
+            ["uint8", order_type],
+            ["uint8", order_side],
+            ["string", order_quantity],
+            ["bool", bool(order_quantity)],
+            ["string", order_price or ""],
+            ["string", order_stop_price or ""],
+            ["string", order_custom_client_order_id or ""],
+            ["uint8", order_time_in_force],
+            ["uint8", order_self_trade_trevention or 0],
+            ["uint64", 0]
+        ]
+
+        fields = [item[0] for item in parameters]
+        values = [item[1] for item in parameters]
+
+        signature_parameters_hash = Web3.solidityKeccak(fields, values)
+
+        return Account.sign_message(
+            signable_message=encode_defunct(text=signature_parameters_hash.hex()),
+            private_key=private_key
+        )
 
     @staticmethod
     def generate_nonce():
