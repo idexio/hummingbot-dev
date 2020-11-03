@@ -31,11 +31,12 @@ class IdexAuthUnitTest(unittest.TestCase):
         self.assertIn("nonce", result["url"])
 
     def test_wallet_signature(self):
-        account = Account.create()
-
+        account = Account.from_key(
+            b'\xba\xe6\x89\x00\x11\xb6N\xe2n\xe2\x82i,\x8e\xef\x073\x0f\xd8\xac\x10\x1d*\xe6\xcf\xa6\xac\xd3\x0f\x94\r\x01'
+        )
         auth = IdexAuth(api_key="key_id", secret_key="key_secret")
         signature = auth.sign_wallet(
-            nonce=auth.generate_nonce(),
+            nonce="5351ba18-1dd3-11eb-b0f2-0242ac110002",
             wallet=account.address,
             market="DIL-ETH",
             order_type=OrderType.MARKET.value,
@@ -44,19 +45,24 @@ class IdexAuthUnitTest(unittest.TestCase):
             order_price="200.000000",
             order_stop_price="150.000000",
             order_custom_client_order_id="123",
-            order_time_in_force=int(time.time() - 100),
+            order_time_in_force=123321321,
             order_self_trade_trevention=None,
             private_key=account.privateKey
         )
 
+        print(auth.generate_nonce())
+        print(int(time.time() - 100))
+        print(signature.messageHash)
+        print(signature.signature)
+
         self.assertEqual(
             signature.messageHash,
-            b'\x0e\xd1\x00\xd3\xd9\xf3\xb6sx\xd2\x1c\x07\x1b.yU\xdd$n\xc7\xcd\x15\x81\xefK\xe1@\xd9\xa8\xda9|'
+            b'\xdd\xfa\x8c\x96<\xca\xc9\xc0\xc6\xe2@!\r\x00\xba\x0e!\xad<dx\x87lU\x95\x90PE\x95G\r\x00'
         )
         self.assertEqual(
             signature.signature,
-            b'\\ro2\xbf\x9a\x95cb\xbd\xe87M_p\xba\xf0\x7f\x15~At)\xedp9\x11]\x80\x10\xd2t\x12_\xac\xa9\x15\xa2T\x90\xf7'
-            b'\xd9\x95d\x00\xbc\x17d\xf3\xc2%\xad\xbc\xa2\xcc\xb8\xbb^\x97\xec\x82\xefSh\x1c'
+            b"\xb2\x97\xf7\x05\xd0\xe3\t0g\xde\x94D\x88\x9a\xa5\x12\x07\xe9D\xfe\xc2\xd8\x07'\xa1*\x9a\xa2H\x1a`\x15K"
+            b"\xf5\xab \x7f\xe0-K\x05\xec\x9f\x1d\xc8\x01;\x11=Y\xc5\x816\xb2\xabG\xcb\\\xe6\xe0]\x86\x9c\xa5\x1c"
         )
 
     def test_post_signature(self):
