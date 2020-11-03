@@ -50,11 +50,6 @@ class IdexAuthUnitTest(unittest.TestCase):
             private_key=account.privateKey
         )
 
-        print(auth.generate_nonce())
-        print(int(time.time() - 100))
-        print(signature.messageHash)
-        print(signature.signature)
-
         self.assertEqual(
             signature.messageHash,
             b'\xdd\xfa\x8c\x96<\xca\xc9\xc0\xc6\xe2@!\r\x00\xba\x0e!\xad<dx\x87lU\x95\x90PE\x95G\r\x00'
