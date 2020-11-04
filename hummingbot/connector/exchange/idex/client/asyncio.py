@@ -15,6 +15,13 @@ from ..types.rest import response
 from ..types.websocket import response as ws_response
 
 
+def json_default(value):
+    # Process enums if they where passed as items
+    if hasattr(value, "value"):
+        return value.value
+    return value
+
+
 def rest_decorator(call,
          request_cls: typing.Type = None,
          response_cls: typing.Type = None,
@@ -154,7 +161,7 @@ class AsyncBaseClient:
                 })
 
             print(f"WSS: {subscription_request}")
-            await ws.send_json(subscription_request)
+            await ws.send_str(json.dumps(subscription_request, default=json_default))
             async for message in ws:   # type: WSMessage
                 if message.type in (
                         WSMsgType.CLOSE,
@@ -214,7 +221,7 @@ class AsyncBaseClient:
         elif method == "get" and data:
             url = f"{url}?{urlencode(data)}"
         else:
-            body = json.dumps(data)
+            body = json.dumps(data, default=json_default)
 
         # TODO: Move to logging
         if method.lower() == "get":
