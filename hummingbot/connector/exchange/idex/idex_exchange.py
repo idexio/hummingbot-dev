@@ -47,7 +47,7 @@ class IdexExchange(ExchangeBase):
         self._idex_auth: IdexAuth = IdexAuth(idex_api_key, idex_api_secret_key)
         self._client: AsyncIdexClient = AsyncIdexClient(auth=self._idex_auth)
         self._order_book_tracker = IdexOrderBookTracker(trading_pairs=trading_pairs)
-        self._user_stream_tracker = IdexUserStreamTracker(self._idex_com_auth, trading_pairs)
+        self._user_stream_tracker = IdexUserStreamTracker(self._idex_auth, trading_pairs)
         self._ev_loop = asyncio.get_event_loop()
         self._shared_client = None
         self._poll_notifier = asyncio.Event()
