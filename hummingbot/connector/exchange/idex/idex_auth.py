@@ -3,15 +3,15 @@ import hmac
 import string
 import uuid
 import hashlib
-from decimal import Decimal
 
 from typing import Dict, Union
 from urllib.parse import urlencode
 
 from eth_account import Account
-from eth_account.messages import SignableMessage, encode_defunct
-from web3 import Web3, eth
+from eth_account.messages import encode_defunct
+from web3 import Web3
 
+from hummingbot.connector.exchange.idex.conf import settings
 from hummingbot.core.event.events import OrderType, TradeType
 
 
@@ -62,6 +62,8 @@ class IdexAuth:
                     order_time_in_force: int = None,
                     order_self_trade_trevention: int = None,
                     private_key: str = None):
+
+        private_key = private_key or settings.eth_account_private_key
 
         parameters = [
             ["uint8", 1],
@@ -116,11 +118,12 @@ class IdexAuth:
                 "nonce": self.generate_nonce()
             })
 
-        url = f"{url}?{urlencode(params)}"
+        params = urlencode(params)
+        url = f"{url}?{params}"
         return {
             "headers": {
                 "IDEX-API-Key": self.api_key,
-                "IDEX-HMAC-Signature": self.sign(url)
+                "IDEX-HMAC-Signature": self.sign(params)
             },
             "url": url
         }

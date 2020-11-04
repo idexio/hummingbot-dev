@@ -6,6 +6,7 @@ from dataclasses import dataclass, asdict
 from urllib.parse import urlencode
 
 from aiohttp import ClientSession, WSMsgType, WSMessage
+from eth_account import Account
 
 from .exceptions import RemoteApiError
 from ..conf import settings
@@ -140,6 +141,7 @@ class AsyncBaseClient:
         """
         TODO: explicit disconnect method
         """
+        wallet = wallet or Account.from_key(settings.eth_account_private_key).address
         url = settings.ws_api_url
         async with self.session.ws_connect(url) as ws:
             subscription_request = {
@@ -234,9 +236,11 @@ class AsyncBaseClient:
                 method, url, headers=headers, data=body
             )
             if resp.status != 200:
+                print(f"HEADERS: {headers}")
+                resp_body = await resp.content.read()
                 raise RemoteApiError(
                     code="RESPONSE_ERROR",
-                    message=f"Got unexpected response with status `{resp.status}`"
+                    message=f"Got unexpected response with status `{resp.status}` and `{resp_body}` body"
                 )
             result = await resp.json()
             # TODO: Move to logging
