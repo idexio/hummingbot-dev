@@ -120,16 +120,60 @@ class IdexExchange(ExchangeBase):
         """
         pass
 
+    async def execute_buy(self,
+                          order_id: str,
+                          trading_pair: str,
+                          amount: Decimal,
+                          order_type: OrderType,
+                          price: Optional[Decimal] = s_decimal_NaN):
+        return await self._create_order(
+            TradeType.BUY.value,
+            order_id,
+            trading_pair,
+            amount,
+            order_type,
+            price
+        )
+
+    async def execute_sell(self,
+                          order_id: str,
+                          trading_pair: str,
+                          amount: Decimal,
+                          order_type: OrderType,
+                          price: Optional[Decimal] = s_decimal_NaN):
+        return await self._create_order(
+            TradeType.SELL.value,
+            order_id,
+            trading_pair,
+            amount,
+            order_type,
+            price
+        )
+
     def buy(self, trading_pair: str, amount: Decimal, order_type=OrderType.MARKET, price: Decimal = s_decimal_NaN,
             **kwargs):
         order_id = create_id()
-        safe_ensure_future(self._create_order("buy", order_id, trading_pair, amount, order_type, price))
+        safe_ensure_future(self._create_order(
+            TradeType.BUY.value,
+            order_id,
+            trading_pair,
+            amount,
+            order_type,
+            price
+        ))
         return order_id
 
     def sell(self, trading_pair: str, amount: Decimal, order_type=OrderType.MARKET, price: Decimal = s_decimal_NaN,
              **kwargs):
         order_id = create_id()
-        safe_ensure_future(self._create_order("sell", order_id, trading_pair, amount, order_type, price))
+        safe_ensure_future(self._create_order(
+            TradeType.BUY.value,
+            order_id,
+            trading_pair,
+            amount,
+            order_type,
+            price
+        ))
         return order_id
 
     async def _create_order(self,
