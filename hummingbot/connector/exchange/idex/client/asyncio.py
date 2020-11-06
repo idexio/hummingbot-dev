@@ -19,7 +19,13 @@ from ..types.websocket import response as ws_response
 def json_default(value):
     # Process enums if they where passed as items
     if hasattr(value, "value"):
-        return value.value
+        value = value.value
+    # Process hex objects
+    if hasattr(value, "hex"):
+        value = value.hex
+    # Process callable
+    if callable(value):
+        value = value()
     return value
 
 
@@ -101,6 +107,15 @@ WEBSOCKET_MESSAGE_TYPES = {
 }
 
 
+def reload_session(f):
+    @functools.wraps(f)
+    def wrapper(self: "AsyncIdexClient", *args, **kwargs):
+        if self.session.closed:
+            self.session = ClientSession()
+        return f(self, *args, **kwargs)
+    return wrapper
+
+
 @dataclass
 class AsyncBaseClient:
 
@@ -131,6 +146,7 @@ class AsyncBaseClient:
                 message=result["message"]
             )
 
+    @reload_session
     async def subscribe(self,
                         subscriptions: typing.List[typing.Union[str, typing.Dict]] = None,
                         markets: typing.List[str] = None,
@@ -189,13 +205,15 @@ class AsyncBaseClient:
                     message = cls(**message)
                 yield message
 
+    @reload_session
     async def request(self,
                       method: str,
                       endpoint: str,
                       data: typing.Union[dict, typing.Any] = None,
-                      request_cls=None,
-                      response_cls=None,
-                      signed=False):
+                      request_cls: typing.Type = None,
+                      response_cls: typing.Type = None,
+                      signed: bool =False,
+                      wallet_signature: str = None):
         if signed and not self.auth:
             raise Exception("IdexAuth instance required, auth attribute was not inited")
 
@@ -215,7 +233,8 @@ class AsyncBaseClient:
                 method,
                 url,
                 data if method == "get" else None,
-                data if method != "get" else None
+                data if method != "get" else None,
+                wallet_signature=wallet_signature
             )
             url = signed_payload["url"]
             headers = signed_payload["headers"]
@@ -236,20 +255,19 @@ class AsyncBaseClient:
                 method, url, headers=headers, data=body
             )
             if resp.status != 200:
-                print(f"HEADERS: {headers}")
+                # print(f"HEADERS: {headers}")
                 resp_body = await resp.content.read()
                 raise RemoteApiError(
                     code="RESPONSE_ERROR",
                     message=f"Got unexpected response with status `{resp.status}` and `{resp_body}` body"
                 )
             result = await resp.json()
-            # TODO: Move to logging
-            # print(f"RESULT: {method.upper()}: {url} with {params or payload}\n {json.dumps(result, indent=2)}")
             if isinstance(result, dict) and set(result.keys()) == {"code", "message"}:
                 raise RemoteApiError(
                     code=result["code"],
                     message=result["message"]
                 )
+            # print(f"RESULT: {method.upper()}: {url} with {body}\n {json.dumps(result, indent=2)}")
             if response_cls and isinstance(result, list):
                 return [response_cls(**obj) for obj in result]
             elif response_cls and isinstance(result, dict):
@@ -372,3 +390,28 @@ class User(EndpointGroup):
     @rest.signed.get("wallets", response_cls=response.RestResponseWallet)
     async def wallets(self) -> typing.List[response.RestResponseWallet]:
         pass
+
+    async def associate_wallet(self,
+                               nonce: str = None,
+                               wallet: str = None) -> typing.List[response.RestResponseAssociateWallet]:
+        nonce = nonce or IdexAuth.generate_nonce()
+        wallet = wallet or IdexAuth.get_wallet().address
+
+        # Get wallet signature
+        wallet_signature = IdexAuth.wallet_signature(
+            ("uint128", IdexAuth.hex_to_uint128(nonce)),
+            ("address", wallet)
+        )
+
+        return await self.client.request(
+            method="POST",
+            endpoint="wallets",
+            data={
+                "parameters": {
+                    "nonce": nonce,
+                    "wallet": wallet,
+                },
+            },
+            signed=True,
+            wallet_signature=wallet_signature
+        )
