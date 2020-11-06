@@ -59,6 +59,8 @@ class IdexExchange(ExchangeBase):
         self._user_stream_event_listener_task = None
         self._trading_rules_polling_task = None
         self._last_poll_timestamp = 0
+        self._account_balances = {}  # Dict[asset_name:str, Decimal]
+        self._account_available_balances = {}  # Dict[asset_name:str, Decimal]
 
     @property
     def tracking_states(self) -> Dict[str, any]:
@@ -262,9 +264,43 @@ class IdexExchange(ExchangeBase):
         """
         await self.stop_network()
         self._order_book_tracker.start()
+        if self._trading_required:
+            self._status_polling_task = safe_ensure_future(self._status_polling_loop())
+            self._user_stream_tracker_task = safe_ensure_future(self._user_stream_tracker.start())
+            # TODO: implement ?
+            # self._user_stream_event_listener_task = safe_ensure_future(self._user_stream_event_listener())
 
     async def stop_network(self):
         self._order_book_tracker.stop()
+
+        if self._status_polling_task is not None:
+            self._status_polling_task.cancel()
+        if self._user_stream_tracker_task is not None:
+            self._user_stream_tracker_task.cancel()
+        # if self._user_stream_event_listener_task is not None:
+        #     self._user_stream_event_listener_task.cancel()
+        # if self._trading_rules_polling_task is not None:
+        #     self._trading_rules_polling_task.cancel()
+        self._status_polling_task = self._user_stream_tracker_task = self._user_stream_event_listener_task = None
+
+    async def _status_polling_loop(self):
+        while True:
+            try:
+                self._poll_notifier = asyncio.Event()
+                await self._poll_notifier.wait()
+                await safe_gather(
+                    self._update_balances(),
+                    # self._update_order_fills_from_trades(),
+                    # self._update_order_status(),
+                )
+                self._last_poll_timestamp = self._current_timestamp
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self.logger().network("Unexpected error while fetching account updates.", exc_info=True,
+                                      app_warning_msg="Could not fetch account updates from Binance. "
+                                                      "Check API key and network connection.")
+                await asyncio.sleep(0.5)
 
     def get_fee(self,
                 base_currency: str,
@@ -274,6 +310,7 @@ class IdexExchange(ExchangeBase):
                 amount: Decimal,
                 price: Decimal = s_decimal_NaN) -> TradeFee:
         return estimate_fee(EXCHANGE_NAME, order_type == TradeType.BUY)
+
 
     @property
     def status_dict(self) -> Dict[str, bool]:
@@ -336,14 +373,14 @@ class IdexExchange(ExchangeBase):
         balances = {}
         wallets = await self._client.user.wallets()
         for wallet in wallets:
-            accounts = await self._client.user.balances(wallet.address)
+            accounts = await self._client.user.balances(wallet=wallet.address)
             for account in accounts:
                 # Set available balance
-                balances_available.setdefault(wallet, {})
-                balances_available[wallet][account.asset] = Decimal(account.availableForTrade)
+                balances_available.setdefault(wallet.address, {})
+                balances_available[wallet.address][account.asset] = Decimal(account.availableForTrade)
                 # Set balance
-                balances.setdefault(wallet, {})
-                balances[wallet][account.asset] = Decimal(account.quantity)
+                balances.setdefault(wallet.address, {})
+                balances[wallet.address][account.asset] = Decimal(account.quantity)
 
         self._account_available_balances = balances_available
         self._account_balances = balances
