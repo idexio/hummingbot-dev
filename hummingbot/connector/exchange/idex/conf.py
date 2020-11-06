@@ -5,7 +5,7 @@ from dataclasses import dataclass, fields
 
 def inflect_env(s: "Settings"):
     for field in fields(s):
-        env_value = os.getenv(f"IDEX_{field.name.upper}")
+        env_value = os.getenv(f"IDEX_{field.name.upper()}")
         if not env_value:
             continue
         setattr(s, field.name, field.type(env_value))
