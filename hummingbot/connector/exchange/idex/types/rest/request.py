@@ -32,8 +32,8 @@ class RestRequestFindWithPagination:
     limit: typing.Optional[int]
 
 
+@dataclass
 class RestRequestFindBalances:
-    nonce: str
     wallet: str
     asset: typing.Optional[str] = None
 
