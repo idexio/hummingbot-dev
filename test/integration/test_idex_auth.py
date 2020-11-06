@@ -1,15 +1,14 @@
 #!/usr/bin/env python
+import sys
 import logging
-import time
 import unittest
 
 from os.path import join, realpath
-import sys
-
 from eth_account import Account
 
 from hummingbot.connector.exchange.idex.idex_auth import IdexAuth
 from hummingbot.core.event.events import OrderType, TradeType
+
 
 sys.path.insert(0, realpath(join(__file__, "../../../")))
 
@@ -30,34 +29,31 @@ class IdexAuthUnitTest(unittest.TestCase):
         )
         self.assertIn("nonce", result["url"])
 
+    def test_uint128_integration(self):
+        for item in [
+            "0x46c588f0-1f69-11eb-9714-fb733e326f68",
+            "46c588f0-1f69-11eb-9714-fb733e326f68",
+            "0x46c588f01f6911eb9714fb733e326f68"
+        ]:
+            uint128 = IdexAuth.hex_to_uint128(item)
+            self.assertEqual(uint128, 0x46c588f01f6911eb9714fb733e326f68)
+
     def test_wallet_signature(self):
         account = Account.from_key(
-            b'\xba\xe6\x89\x00\x11\xb6N\xe2n\xe2\x82i,\x8e\xef\x073\x0f\xd8\xac\x10\x1d*\xe6\xcf\xa6\xac\xd3\x0f\x94\r\x01'
+            "0xbae6890011b64ee26ee282692c8eef07330fd8ac101d2ae6cfa6acd30f940d01"
         )
-        auth = IdexAuth(api_key="key_id", secret_key="key_secret")
-        signature = auth.sign_wallet(
-            nonce="5351ba18-1dd3-11eb-b0f2-0242ac110002",
-            wallet=account.address,
-            market="DIL-ETH",
-            order_type=OrderType.MARKET.value,
-            order_side=TradeType.BUY.value,
-            order_quantity="1000.000000",
-            order_price="200.000000",
-            order_stop_price="150.000000",
-            order_custom_client_order_id="123",
-            order_time_in_force=123321321,
-            order_self_trade_trevention=None,
+
+        nonce = "cf7989e0-2030-11eb-8473-f1ca5eaaaff1"
+        signature = IdexAuth.wallet_signature(
+            ("uint128", IdexAuth.hex_to_uint128(nonce)),
+            ("address", account.address),
             private_key=account.privateKey
         )
 
         self.assertEqual(
-            signature.messageHash,
-            b'\xdd\xfa\x8c\x96<\xca\xc9\xc0\xc6\xe2@!\r\x00\xba\x0e!\xad<dx\x87lU\x95\x90PE\x95G\r\x00'
-        )
-        self.assertEqual(
-            signature.signature,
-            b"\xb2\x97\xf7\x05\xd0\xe3\t0g\xde\x94D\x88\x9a\xa5\x12\x07\xe9D\xfe\xc2\xd8\x07'\xa1*\x9a\xa2H\x1a`\x15K"
-            b"\xf5\xab \x7f\xe0-K\x05\xec\x9f\x1d\xc8\x01;\x11=Y\xc5\x816\xb2\xabG\xcb\\\xe6\xe0]\x86\x9c\xa5\x1c"
+            signature,
+            "0x42c474e4d58070c9be966ab925d0370b8e5ff4c5fd9ab623382b15262de2956e"
+            "02e0a11b721edc26896134fd87fec71dd5e0cb6ada7ad2d5b004ac8dc32eb8071c"
         )
 
     def test_post_signature(self):
