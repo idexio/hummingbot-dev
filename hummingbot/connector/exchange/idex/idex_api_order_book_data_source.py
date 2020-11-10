@@ -33,7 +33,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
             market=await to_idex_pair(pair)
         )
         if result:
-            return float(result[0].close)
+            return float(result[0].close or 0)
 
     @classmethod
     async def get_last_traded_prices(cls, trading_pairs: List[str]) -> Dict[str, float]:

@@ -8,6 +8,7 @@ from hummingbot.logger import HummingbotLogger
 
 from .client.asyncio import AsyncIdexClient
 from .idex_auth import IdexAuth
+from .utils import get_markets
 
 
 class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
@@ -36,7 +37,10 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
     async def _listen_to_orders_trades_balances(self) -> AsyncIterable[Any]:
         try:
             client = AsyncIdexClient()
-            async for message in client.subscribe(["orders", "trades", "balances"], auth=self._idex_auth):
+            async for message in client.subscribe(
+                    subscriptions=["orders", "trades", "balances"],
+                    markets=(await get_markets()),
+                    auth=self._idex_auth):
                 # Will raise ValueError if message will not able to handle
                 yield message
                 self._last_recv_time = time.time()

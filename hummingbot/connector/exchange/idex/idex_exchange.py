@@ -9,12 +9,11 @@ from async_timeout import timeout
 
 from hummingbot.connector.exchange_base import ExchangeBase, s_decimal_NaN
 from hummingbot.connector.in_flight_order_base import InFlightOrderBase
-from hummingbot.core.clock import Clock
 from hummingbot.core.data_type.cancellation_result import CancellationResult
 from hummingbot.core.data_type.limit_order import LimitOrder
 from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.core.event.events import OrderType, TradeType, TradeFee
-from hummingbot.core.network_base import NetworkStatus
+from hummingbot.core.network_iterator import NetworkStatus
 from hummingbot.core.utils.async_utils import safe_ensure_future, safe_gather
 from hummingbot.core.utils.estimate_fee import estimate_fee
 
@@ -237,7 +236,6 @@ class IdexExchange(ExchangeBase):
         return self._order_book_tracker.order_books[trading_pair]
 
     async def check_network(self) -> NetworkStatus:
-        print("NET: check")
         try:
             result = await self._client.public.get_ping()
             assert result == {}
@@ -248,11 +246,6 @@ class IdexExchange(ExchangeBase):
         return NetworkStatus.CONNECTED
 
     async def start_network(self):
-        """
-        TODO: _status_polling_loop
-        :return:
-        """
-        print("NET: start")
         await self.stop_network()
         self._order_book_tracker.start()
         if self._trading_required:
@@ -275,7 +268,6 @@ class IdexExchange(ExchangeBase):
         self._status_polling_task = self._user_stream_tracker_task = self._user_stream_event_listener_task = None
 
     async def _status_polling_loop(self):
-        print("STATUS POLLING: start")
         while True:
             try:
                 self._poll_notifier = asyncio.Event()
@@ -375,8 +367,6 @@ class IdexExchange(ExchangeBase):
                 # Set balance
                 balances.setdefault(wallet.address, {})
                 balances[wallet.address][account.asset] = Decimal(account.quantity)
-
-        print(f"BAL: {balances}")
 
         self._account_available_balances = balances_available
         self._account_balances = balances

@@ -131,7 +131,7 @@ class AsyncBaseClient:
         signed_request = auth.generate_auth_dict_for_get(f"{endpoint}/wsToken", params={
             "wallet": wallet
         })
-        resp = await self.session.get(url=signed_request["url"])
+        resp = await self.session.get(**signed_request)
         result = await resp.json()
         if resp.status != 200 or not isinstance(result, dict):
             raise RemoteApiError(
