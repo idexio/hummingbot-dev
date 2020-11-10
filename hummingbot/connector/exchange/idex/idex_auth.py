@@ -32,11 +32,10 @@ class IdexAuth:
 
     @classmethod
     def hex_to_uint128(cls, value):
-        # Deal with leading zero
-        if value.startswith("0x"):
-            value = value[2:]
+        # Deal with leading 0x
+        value = value.split("x", 1)[-1]
         # Filter none hex
-        value = '0x' + ''.join([c for c in value if c in cls.HEX_DIGITS_SET])
+        value = f"0x{''.join([c for c in value if c in cls.HEX_DIGITS_SET])}"
         return int(value, 16)
 
     @classmethod
@@ -46,23 +45,6 @@ class IdexAuth:
 
     @classmethod
     def wallet_signature(cls, *parameters: Tuple[str, Any], private_key: str = None):
-        # parameters = [
-        #     ["uint8", 1],
-        #     ["uint128", self.hex_to_uint128(nonce)],
-        #     ["address", wallet.address],
-        #     ["string", market],
-        #     ["uint8", order_type],
-        #     ["uint8", order_side],
-        #     ["string", order_quantity],
-        #     ["bool", bool(order_quantity)],
-        #     ["string", order_price or ""],
-        #     ["string", order_stop_price or ""],
-        #     ["string", order_custom_client_order_id or ""],
-        #     ["uint8", order_time_in_force],
-        #     ["uint8", order_self_trade_trevention or 0],
-        #     ["uint64", 0]
-        # ]
-
         fields = [item[0] for item in parameters]
         values = [item[1] for item in parameters]
 

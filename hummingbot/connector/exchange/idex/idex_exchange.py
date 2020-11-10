@@ -48,6 +48,7 @@ class IdexExchange(ExchangeBase):
         self._client: AsyncIdexClient = AsyncIdexClient(auth=self._idex_auth)
         self._order_book_tracker = IdexOrderBookTracker(trading_pairs=trading_pairs)
         self._user_stream_tracker = IdexUserStreamTracker(self._idex_auth, trading_pairs)
+        self._user_stream_tracker_task = None
         self._ev_loop = asyncio.get_event_loop()
         self._shared_client = None
         self._poll_notifier = asyncio.Event()
@@ -86,18 +87,6 @@ class IdexExchange(ExchangeBase):
         :return:
         """
         return [OrderType.MARKET, OrderType.LIMIT, OrderType.LIMIT_MAKER]
-
-    def start(self, clock: Clock, timestamp: float):
-        """
-        This function is called automatically by the clock.
-        """
-        super().start(clock, timestamp)
-
-    def stop(self, clock: Clock):
-        """
-        This function is called automatically by the clock.
-        """
-        super().stop(clock)
 
     @property
     def order_books(self) -> Dict[str, OrderBook]:
@@ -248,6 +237,7 @@ class IdexExchange(ExchangeBase):
         return self._order_book_tracker.order_books[trading_pair]
 
     async def check_network(self) -> NetworkStatus:
+        print("NET: check")
         try:
             result = await self._client.public.get_ping()
             assert result == {}
@@ -262,6 +252,7 @@ class IdexExchange(ExchangeBase):
         TODO: _status_polling_loop
         :return:
         """
+        print("NET: start")
         await self.stop_network()
         self._order_book_tracker.start()
         if self._trading_required:
@@ -284,12 +275,13 @@ class IdexExchange(ExchangeBase):
         self._status_polling_task = self._user_stream_tracker_task = self._user_stream_event_listener_task = None
 
     async def _status_polling_loop(self):
+        print("STATUS POLLING: start")
         while True:
             try:
                 self._poll_notifier = asyncio.Event()
                 await self._poll_notifier.wait()
                 await safe_gather(
-                    self._update_balances(),
+                    self._update_balances("_status_polling_loop"),
                     # self._update_order_fills_from_trades(),
                     # self._update_order_status(),
                 )
@@ -311,16 +303,18 @@ class IdexExchange(ExchangeBase):
                 price: Decimal = s_decimal_NaN) -> TradeFee:
         return estimate_fee(EXCHANGE_NAME, order_type == TradeType.BUY)
 
-
     @property
     def status_dict(self) -> Dict[str, bool]:
-        return {
+        result = {
             "order_books_initialized": self._order_book_tracker.ready,
             "account_balance": len(self._account_balances) > 0 if self._trading_required else True,
             "trading_rule_initialized": len(self._trading_rules) > 0,
-            "user_stream_initialized":
-                self._user_stream_tracker.data_source.last_recv_time > 0 if self._trading_required else True,
+            "user_stream_initialized": self._user_stream_tracker.data_source.last_recv_time > 0 if self._trading_required else True,
         }
+        return result
+
+    async def server_time(self) -> int:
+        return (await self._client.public.get_time()).serverTime
 
     @property
     def ready(self) -> bool:
@@ -332,11 +326,11 @@ class IdexExchange(ExchangeBase):
 
     async def cancel_all(self, timeout_seconds: float):
         """
-                Cancels all in-flight orders and waits for cancellation results.
-                Used by bot's top level stop and exit commands (cancelling outstanding orders on exit)
-                :param timeout_seconds: The timeout at which the operation will be canceled.
-                :returns List of CancellationResult which indicates whether each order is successfully cancelled.
-                """
+        Cancels all in-flight orders and waits for cancellation results.
+        Used by bot's top level stop and exit commands (cancelling outstanding orders on exit)
+        :param timeout_seconds: The timeout at which the operation will be canceled.
+        :returns List of CancellationResult which indicates whether each order is successfully cancelled.
+        """
         incomplete_orders = [o for o in self._in_flight_orders.values() if not o.is_done]
         tasks = [self._execute_cancel(o.trading_pair, o.client_order_id, True) for o in incomplete_orders]
         order_id_set = set([o.client_order_id for o in incomplete_orders])
@@ -366,7 +360,7 @@ class IdexExchange(ExchangeBase):
     _account_available_balances = None
     _account_balances = None
 
-    async def _update_balances(self):
+    async def _update_balances(self, sender=None):
         self._account_available_balances = self._account_available_balances or {}
         self._account_balances = self._account_balances or {}
         balances_available = {}
@@ -381,6 +375,8 @@ class IdexExchange(ExchangeBase):
                 # Set balance
                 balances.setdefault(wallet.address, {})
                 balances[wallet.address][account.asset] = Decimal(account.quantity)
+
+        print(f"BAL: {balances}")
 
         self._account_available_balances = balances_available
         self._account_balances = balances

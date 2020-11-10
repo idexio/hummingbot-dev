@@ -173,7 +173,7 @@ class RestResponseTicker:
 
 @dataclass
 class RestResponseTime:
-    serverTime: float
+    serverTime: int
 
 
 @dataclass
