@@ -14,3 +14,7 @@ class RemoteApiError(Exception):
 
     def __repr__(self):
         return f"<ApiError {self.code}: {self.message}>"
+
+
+class TooManyRequestError(Exception):
+    pass

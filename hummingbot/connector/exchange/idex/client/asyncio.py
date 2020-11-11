@@ -1,6 +1,7 @@
 import json
 import typing
 import functools
+from asyncio import sleep
 
 from dataclasses import dataclass, asdict
 from urllib.parse import urlencode
@@ -8,7 +9,7 @@ from urllib.parse import urlencode
 from aiohttp import ClientSession, WSMsgType, WSMessage
 from eth_account import Account
 
-from .exceptions import RemoteApiError
+from .exceptions import RemoteApiError, TooManyRequestError
 from ..conf import settings
 from ..idex_auth import IdexAuth
 from ..types.rest import request
@@ -116,6 +117,24 @@ def reload_session(f):
     return wrapper
 
 
+def handle429(f):
+    @functools.wraps(f)
+    async def wrapper(*args, **kwargs):
+        max_tries = 3
+        while max_tries:
+            try:
+                return await f(*args, **kwargs)
+            except TooManyRequestError:
+                # TODO: Dow we need to deal with 5s/10s
+                print("THR: Request was throttled! Sleep 10 seconds.")
+                await sleep(10)
+                continue
+            finally:
+                max_tries -= 1
+        raise TooManyRequestError()
+    return wrapper
+
+
 @dataclass
 class AsyncBaseClient:
 
@@ -206,6 +225,7 @@ class AsyncBaseClient:
                 yield message
 
     @reload_session
+    @handle429
     async def request(self,
                       method: str,
                       endpoint: str,
@@ -254,8 +274,11 @@ class AsyncBaseClient:
             resp = await session.request(
                 method, url, headers=headers, data=body
             )
+            # Raise 429
+            if resp.status == 429:
+                raise TooManyRequestError()
+            # Raise if not 200
             if resp.status != 200:
-                # print(f"HEADERS: {headers}")
                 resp_body = await resp.content.read()
                 raise RemoteApiError(
                     code="RESPONSE_ERROR",
