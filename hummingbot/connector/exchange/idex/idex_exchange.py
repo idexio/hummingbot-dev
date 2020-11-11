@@ -176,7 +176,7 @@ class IdexExchange(ExchangeBase):
         market = await to_idex_pair(trading_pair)
         await self._client.trade.create_order(
             parameters=RestRequestOrder(
-                wallet="None",  # TODO: Get wallet
+                wallet=self._idex_auth.get_wallet().address,
                 clientOrderId=order_id,
                 market=market,
                 quantity=str(amount),
@@ -303,6 +303,7 @@ class IdexExchange(ExchangeBase):
             "trading_rule_initialized": len(self._trading_rules) > 0,
             "user_stream_initialized": self._user_stream_tracker.data_source.last_recv_time > 0 if self._trading_required else True,
         }
+        print(result)
         return result
 
     async def server_time(self) -> int:
