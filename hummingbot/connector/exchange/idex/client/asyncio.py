@@ -1,11 +1,10 @@
 import json
 import typing
 import functools
-from asyncio import sleep
 
+from asyncio import sleep
 from dataclasses import dataclass, asdict
 from urllib.parse import urlencode
-
 from aiohttp import ClientSession, WSMsgType, WSMessage
 from eth_account import Account
 
@@ -37,7 +36,7 @@ def rest_decorator(call,
          signed: bool = False):
     def decorator(f):
         @functools.wraps(f)
-        async def wrapper(self, **kwargs):
+        async def rest_decorator_wrapper(self, **kwargs):
             return await self.client.request(
                 method,
                 call,
@@ -46,7 +45,7 @@ def rest_decorator(call,
                 response_cls=response_cls,
                 signed=signed
             )
-        return wrapper
+        return rest_decorator_wrapper
     return decorator
 
 
@@ -108,18 +107,10 @@ WEBSOCKET_MESSAGE_TYPES = {
 }
 
 
-def reload_session(f):
-    @functools.wraps(f)
-    def wrapper(self: "AsyncIdexClient", *args, **kwargs):
-        if self.session.closed:
-            self.session = ClientSession()
-        return f(self, *args, **kwargs)
-    return wrapper
-
-
 def handle429(f):
+
     @functools.wraps(f)
-    async def wrapper(*args, **kwargs):
+    async def handle429_wrapper(*args, **kwargs):
         max_tries = 3
         while max_tries:
             try:
@@ -132,7 +123,7 @@ def handle429(f):
             finally:
                 max_tries -= 1
         raise TooManyRequestError()
-    return wrapper
+    return handle429_wrapper
 
 
 @dataclass
@@ -165,7 +156,6 @@ class AsyncBaseClient:
                 message=result["message"]
             )
 
-    @reload_session
     async def subscribe(self,
                         subscriptions: typing.List[typing.Union[str, typing.Dict]] = None,
                         markets: typing.List[str] = None,
@@ -176,6 +166,10 @@ class AsyncBaseClient:
         """
         TODO: explicit disconnect method
         """
+        # Re init session if closed
+        if self.session.closed:
+            self.session = ClientSession()
+
         wallet = wallet or Account.from_key(settings.eth_account_private_key).address
         url = settings.ws_api_url
         async with self.session.ws_connect(url) as ws:
@@ -212,7 +206,7 @@ class AsyncBaseClient:
                 # Get message class
                 # We can always override message via input arg
                 cls = message_cls or (WEBSOCKET_MESSAGE_TYPES.get(message_type) or "Unhandled")
-                print(f"WSM: from {subscription_request}\n   > {cls.__name__}({message})")
+                # print(f"WSM: from {subscription_request}\n   > {cls.__name__}({message})")
 
                 if "type" not in message or message["type"] not in WEBSOCKET_MESSAGE_TYPES:
                     raise ValueError(f"Unable to handle message {message}")
@@ -220,11 +214,9 @@ class AsyncBaseClient:
                 message = message["data"] if "data" in message else message
                 # Make dataclass
                 if cls:
-                    # print(f"DCI: {cls.__name__}({message})")
                     message = cls(**message)
                 yield message
 
-    @reload_session
     @handle429
     async def request(self,
                       method: str,
@@ -234,6 +226,12 @@ class AsyncBaseClient:
                       response_cls: typing.Type = None,
                       signed: bool =False,
                       wallet_signature: str = None):
+
+        # Re init session if closed
+        if self.session.closed:
+            self.session = ClientSession()
+
+        # Check auth
         if signed and not self.auth:
             raise Exception("IdexAuth instance required, auth attribute was not inited")
 

@@ -268,7 +268,9 @@ class IdexExchange(ExchangeBase):
         self._status_polling_task = self._user_stream_tracker_task = self._user_stream_event_listener_task = None
 
     async def _status_polling_loop(self):
+        print(f"POLL: start")
         while True:
+            print(f"POLL: cycle")
             try:
                 self._poll_notifier = asyncio.Event()
                 await self._poll_notifier.wait()
@@ -303,7 +305,6 @@ class IdexExchange(ExchangeBase):
             "trading_rule_initialized": len(self._trading_rules) > 0,
             "user_stream_initialized": self._user_stream_tracker.data_source.last_recv_time > 0 if self._trading_required else True,
         }
-        print(result)
         return result
 
     async def server_time(self) -> int:
@@ -371,3 +372,5 @@ class IdexExchange(ExchangeBase):
 
         self._account_available_balances = balances_available
         self._account_balances = balances
+
+        print(f"BAL: {self._account_balances}")
