@@ -3,7 +3,7 @@ import pandas as pd
 
 from dataclasses import asdict
 from decimal import Decimal
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, AsyncIterable
 
 from async_timeout import timeout
 
@@ -23,6 +23,8 @@ from .idex_in_flight_order import IdexInFlightOrder
 from .idex_order_book_tracker import IdexOrderBookTracker
 from .idex_user_stream_tracker import IdexUserStreamTracker
 from .types.rest.request import RestRequestCancelOrder, RestRequestOrder, OrderSide
+from .types.websocket.response import WebSocketResponseTradeShort, WebSocketResponseBalanceShort, \
+    WebSocketResponseL1OrderBookShort, WebSocketResponseL2OrderBookShort
 from .utils import to_idex_pair, to_idex_order_type, create_id, EXCHANGE_NAME
 
 
@@ -251,8 +253,7 @@ class IdexExchange(ExchangeBase):
         if self._trading_required:
             self._status_polling_task = safe_ensure_future(self._status_polling_loop())
             self._user_stream_tracker_task = safe_ensure_future(self._user_stream_tracker.start())
-            # TODO: implement ?
-            # self._user_stream_event_listener_task = safe_ensure_future(self._user_stream_event_listener())
+            self._user_stream_event_listener_task = safe_ensure_future(self._user_stream_event_listener())
 
     async def stop_network(self):
         self._order_book_tracker.stop()
@@ -261,8 +262,9 @@ class IdexExchange(ExchangeBase):
             self._status_polling_task.cancel()
         if self._user_stream_tracker_task is not None:
             self._user_stream_tracker_task.cancel()
-        # if self._user_stream_event_listener_task is not None:
-        #     self._user_stream_event_listener_task.cancel()
+        if self._user_stream_event_listener_task is not None:
+            self._user_stream_event_listener_task.cancel()
+        # TODO: Implement
         # if self._trading_rules_polling_task is not None:
         #     self._trading_rules_polling_task.cancel()
         self._status_polling_task = self._user_stream_tracker_task = self._user_stream_event_listener_task = None
@@ -374,3 +376,54 @@ class IdexExchange(ExchangeBase):
         self._account_balances = balances
 
         print(f"BAL: {self._account_balances}")
+
+    async def _iter_user_event_queue(self) -> AsyncIterable[Dict[str, any]]:
+        while True:
+            try:
+                yield await self._user_stream_tracker.user_stream.get()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self.logger().network(
+                    "Unknown error. Retrying after 1 seconds.",
+                    exc_info=True,
+                    app_warning_msg="Could not fetch user events from Idex. Check API key and network connection."
+                )
+                await asyncio.sleep(1.0)
+
+    async def _user_stream_event_listener(self):
+        """
+        TODO: implement trade absorb
+        TODO: implement order absorb
+
+        :return:
+        """
+        async for event in self._iter_user_event_queue():
+            if not isinstance(event, (
+                    WebSocketResponseTradeShort,
+                    WebSocketResponseBalanceShort,
+                    WebSocketResponseL1OrderBookShort,
+                    WebSocketResponseL2OrderBookShort)):
+                continue
+
+            print(f"USEL: {event}")
+
+            if isinstance(event, WebSocketResponseBalanceShort):
+                self._account_balances[event.w][event.a] = Decimal(str(event.q))
+                self._account_available_balances[event.w][event.a] = Decimal(str(event.f))
+
+            # try:
+            #     if "result" not in event_message or "channel" not in event_message["result"]:
+            #         continue
+            #     channel = event_message["result"]["channel"]
+            #     if "user.trade" in channel:
+            #         for trade_msg in event_message["result"]["data"]:
+            #             await self._process_trade_message(trade_msg)
+            #     elif "user.order" in channel:
+            #         for order_msg in event_message["result"]["data"]:
+            #             self._process_order_message(order_msg)
+            # except asyncio.CancelledError:
+            #     raise
+            # except Exception:
+            #     self.logger().error("Unexpected error in user stream listener loop.", exc_info=True)
+            #     await asyncio.sleep(5.0)
