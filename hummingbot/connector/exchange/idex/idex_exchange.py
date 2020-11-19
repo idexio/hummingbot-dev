@@ -1,4 +1,6 @@
+import time
 import asyncio
+
 import pandas as pd
 
 from dataclasses import asdict
@@ -12,7 +14,8 @@ from hummingbot.connector.in_flight_order_base import InFlightOrderBase
 from hummingbot.core.data_type.cancellation_result import CancellationResult
 from hummingbot.core.data_type.limit_order import LimitOrder
 from hummingbot.core.data_type.order_book import OrderBook
-from hummingbot.core.event.events import OrderType, TradeType, TradeFee
+from hummingbot.core.event.events import OrderType, TradeType, TradeFee, MarketEvent, BuyOrderCreatedEvent, \
+    SellOrderCreatedEvent, MarketOrderFailureEvent
 from hummingbot.core.network_iterator import NetworkStatus
 from hummingbot.core.utils.async_utils import safe_ensure_future, safe_gather
 from hummingbot.core.utils.estimate_fee import estimate_fee
@@ -22,7 +25,7 @@ from .idex_auth import IdexAuth
 from .idex_in_flight_order import IdexInFlightOrder
 from .idex_order_book_tracker import IdexOrderBookTracker
 from .idex_user_stream_tracker import IdexUserStreamTracker
-from .types.rest.request import RestRequestCancelOrder, RestRequestOrder, OrderSide
+from .types.rest.request import RestRequestCancelOrder, RestRequestOrder, OrderSide, OrderStatus
 from .types.websocket.response import WebSocketResponseTradeShort, WebSocketResponseBalanceShort, \
     WebSocketResponseL1OrderBookShort, WebSocketResponseL2OrderBookShort
 from .utils import to_idex_pair, to_idex_order_type, create_id, EXCHANGE_NAME
@@ -31,6 +34,9 @@ from .utils import to_idex_pair, to_idex_order_type, create_id, EXCHANGE_NAME
 class IdexExchange(ExchangeBase):
 
     name: str = EXCHANGE_NAME
+
+    SHORT_POLL_INTERVAL = 5.0
+    LONG_POLL_INTERVAL = 120.0
 
     def __init__(self,
                  idex_api_key: str,
@@ -119,7 +125,7 @@ class IdexExchange(ExchangeBase):
                           order_type: OrderType,
                           price: Optional[Decimal] = s_decimal_NaN):
         return await self._create_order(
-            TradeType.BUY.value,
+            "buy",
             order_id,
             trading_pair,
             amount,
@@ -134,7 +140,7 @@ class IdexExchange(ExchangeBase):
                           order_type: OrderType,
                           price: Optional[Decimal] = s_decimal_NaN):
         return await self._create_order(
-            TradeType.SELL.value,
+            "sell",
             order_id,
             trading_pair,
             amount,
@@ -146,7 +152,7 @@ class IdexExchange(ExchangeBase):
             **kwargs):
         order_id = create_id()
         safe_ensure_future(self._create_order(
-            TradeType.BUY.value,
+            "buy",
             order_id,
             trading_pair,
             amount,
@@ -159,7 +165,7 @@ class IdexExchange(ExchangeBase):
              **kwargs):
         order_id = create_id()
         safe_ensure_future(self._create_order(
-            TradeType.BUY.value,
+            "sell",
             order_id,
             trading_pair,
             amount,
@@ -176,17 +182,50 @@ class IdexExchange(ExchangeBase):
                             order_type=OrderType.MARKET,
                             price: Decimal = s_decimal_NaN):
         market = await to_idex_pair(trading_pair)
-        await self._client.trade.create_order(
-            parameters=RestRequestOrder(
-                wallet=self._idex_auth.get_wallet().address,
-                clientOrderId=order_id,
-                market=market,
-                quantity=str(amount),
-                type=to_idex_order_type(order_type),
-                price=str(price),
-                side=side
+        try:
+            result = await self._client.trade.create_order(
+                parameters=RestRequestOrder(
+                    wallet=self._idex_auth.get_wallet().address,
+                    clientOrderId=order_id,
+                    market=market,
+                    quantity=str(amount),
+                    type=to_idex_order_type(order_type),
+                    price=str(price),
+                    side=side
+                )
             )
-        )
+            print(f"CREATE ORDER: {result}")
+            if result.status == "active":
+                event_tag = MarketEvent.BuyOrderCreated if side == "buy" else MarketEvent.SellOrderCreated
+                event_class = BuyOrderCreatedEvent if side == "buy" else SellOrderCreatedEvent
+                self.trigger_event(
+                    event_tag,
+                    event_class(
+                        self.current_timestamp,
+                        order_type,
+                        trading_pair,
+                        amount,
+                        price,
+                        order_id
+                    )
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            self.stop_tracking_order(order_id)
+            self.logger().network(
+                f"Error submitting {side} {order_type.name} order to Idex for "
+                f"{amount} {trading_pair} "
+                f"{price}.",
+                exc_info=True,
+                app_warning_msg=str(e)
+            )
+            self.trigger_event(
+                MarketEvent.OrderFailure,
+                MarketOrderFailureEvent(
+                    self.current_timestamp, order_id, order_type
+                )
+            )
 
     def get_order_price_quantum(self, trading_pair: str, price: Decimal) -> Decimal:
         return Decimal(0.00000001)
@@ -270,23 +309,22 @@ class IdexExchange(ExchangeBase):
         self._status_polling_task = self._user_stream_tracker_task = self._user_stream_event_listener_task = None
 
     async def _status_polling_loop(self):
-        print(f"POLL: start")
         while True:
-            print(f"POLL: cycle")
             try:
                 self._poll_notifier = asyncio.Event()
                 await self._poll_notifier.wait()
                 await safe_gather(
                     self._update_balances("_status_polling_loop"),
-                    # self._update_order_fills_from_trades(),
-                    # self._update_order_status(),
+                    # self._update_order_fills_from_trades(), # TODO: TBI
+                    # self._update_order_status(),  # TODO: TBI
                 )
-                self._last_poll_timestamp = self._current_timestamp
+                self._last_poll_timestamp = self.current_timestamp
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as e:
+                print(f"EXC: {e}")
                 self.logger().network("Unexpected error while fetching account updates.", exc_info=True,
-                                      app_warning_msg="Could not fetch account updates from Binance. "
+                                      app_warning_msg="Could not fetch account updates from Idex. "
                                                       "Check API key and network connection.")
                 await asyncio.sleep(0.5)
 
@@ -304,7 +342,7 @@ class IdexExchange(ExchangeBase):
         result = {
             "order_books_initialized": self._order_book_tracker.ready,
             "account_balance": len(self._account_balances) > 0 if self._trading_required else True,
-            "trading_rule_initialized": len(self._trading_rules) > 0,
+            # "trading_rule_initialized": len(self._trading_rules) > 0, # TODO: Implement _trading_rules_polling_task
             "user_stream_initialized": self._user_stream_tracker.data_source.last_recv_time > 0 if self._trading_required else True,
         }
         return result
@@ -314,6 +352,7 @@ class IdexExchange(ExchangeBase):
 
     @property
     def ready(self) -> bool:
+        print(f"READY: {self.status_dict} {self._account_balances}")
         return all(self.status_dict.values())
 
     @property
@@ -338,7 +377,8 @@ class IdexExchange(ExchangeBase):
                     if result is not None and not isinstance(result, Exception):
                         order_id_set.remove(result)
                         successful_cancellations.append(CancellationResult(result, True))
-        except Exception:
+        except Exception as e:
+            print(f"EXC: {e}")
             self.logger().error("Cancel all failed.", exc_info=True)
             self.logger().network(
                 "Unexpected error cancelling orders.",
@@ -348,6 +388,22 @@ class IdexExchange(ExchangeBase):
 
         failed_cancellations = [CancellationResult(oid, False) for oid in order_id_set]
         return successful_cancellations + failed_cancellations
+
+    def tick(self, timestamp: float):
+        """
+        Is called automatically by the clock for each clock's tick (1 second by default).
+        It checks if status polling task is due for execution.
+        """
+        now = time.time()
+        poll_interval = (self.SHORT_POLL_INTERVAL
+                         if now - self._user_stream_tracker.last_recv_time > 60.0
+                         else self.LONG_POLL_INTERVAL)
+        last_tick = self._last_timestamp / poll_interval
+        current_tick = timestamp / poll_interval
+        if current_tick > last_tick:
+            if not self._poll_notifier.is_set():
+                self._poll_notifier.set()
+        self._last_timestamp = timestamp
 
     def stop_tracking_order(self, order_id: str):
         if order_id in self._in_flight_orders:
@@ -377,13 +433,22 @@ class IdexExchange(ExchangeBase):
 
         print(f"BAL: {self._account_balances}")
 
+    def get_balance(self, currency: str) -> Decimal:
+        """
+        :param currency: The currency (token) name
+        :return: A balance for the given currency (token)
+        """
+        wallet = self._idex_auth.get_wallet()
+        return self._account_balances[wallet.address].get(currency, Decimal(0))
+
     async def _iter_user_event_queue(self) -> AsyncIterable[Dict[str, any]]:
         while True:
             try:
                 yield await self._user_stream_tracker.user_stream.get()
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as e:
+                print(f"EXC: {e}")
                 self.logger().network(
                     "Unknown error. Retrying after 1 seconds.",
                     exc_info=True,
