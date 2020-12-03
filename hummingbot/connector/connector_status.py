@@ -13,6 +13,7 @@ connector_status = {
     'eterbase': 'red',
     'ethereum': 'red',
     'huobi': 'green',
+    'idex': 'green',
     'kraken': 'yellow',
     'kucoin': 'green',
     'liquid': 'green',

@@ -246,6 +246,8 @@ class AsyncBaseClient:
         }
         body = None
 
+        print(endpoint)
+
         if signed:
             signed_payload = self.auth.generate_auth_dict(
                 method,
@@ -269,32 +271,37 @@ class AsyncBaseClient:
             print(f"{method.upper()}: {url} with {body}")
 
         async with self.session as session:
-            resp = await session.request(
-                method, url, headers=headers, data=body
-            )
-            # Raise 429
-            if resp.status == 429:
-                raise TooManyRequestError()
-            # Raise if not 200
-            if resp.status != 200:
-                resp_body = await resp.content.read()
-                raise RemoteApiError(
-                    code="RESPONSE_ERROR",
-                    message=f"Got unexpected response with status `{resp.status}` and `{resp_body}` body"
+            try:
+                resp = await session.request(
+                    method, url, headers=headers, data=body
                 )
-            result = await resp.json()
-            if isinstance(result, dict) and set(result.keys()) == {"code", "message"}:
-                raise RemoteApiError(
-                    code=result["code"],
-                    message=result["message"]
-                )
-            # print(f"RESULT: {method.upper()}: {url} with {body}\n {json.dumps(result, indent=2)}")
-            if response_cls and isinstance(result, list):
-                return [response_cls(**obj) for obj in result]
-            elif response_cls and isinstance(result, dict):
-                return response_cls(**result)
-            else:
-                return result
+                print(f"response: method ({method}) url ({url}) status ({resp.status})")
+                # Raise 429
+                if resp.status == 429:
+                    raise TooManyRequestError()
+                # Raise if not 200
+                if resp.status != 200:
+                    resp_body = await resp.content.read()
+                    raise RemoteApiError(
+                        code="RESPONSE_ERROR",
+                        message=f"Got unexpected response with status `{resp.status}` and `{resp_body}` body"
+                    )
+                result = await resp.json()
+                if isinstance(result, dict) and set(result.keys()) == {"code", "message"}:
+                    raise RemoteApiError(
+                        code=result["code"],
+                        message=result["message"]
+                    )
+                # print(f"RESULT: {method.upper()}: {url} with {body}\n {json.dumps(result, indent=2)}")
+                if response_cls and isinstance(result, list):
+                    return [response_cls(**obj) for obj in result]
+                elif response_cls and isinstance(result, dict):
+                    return response_cls(**result)
+                else:
+                    return result
+            except Exception as e:
+                print(f'Request exception... {method} {url} error: {e}')
+                raise e
 
 
 class AsyncIdexClient(AsyncBaseClient):

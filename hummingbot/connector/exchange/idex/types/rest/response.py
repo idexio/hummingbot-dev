@@ -106,17 +106,17 @@ class RestResponseOrder:
     cumulativeQuoteQuantity: str
     timeInForce: OrderTimeInForce
     selfTradePrevention: OrderSelfTradePrevention
-    originalQuoteQuantity: typing.Optional[str]
+    # originalQuoteQuantity: typing.Optional[str]
     originalQuantity: typing.Optional[str]
-    avgExecutionPrice: typing.Optional[str]
-    errorCode: typing.Optional[str]
-    errorMessage: typing.Optional[str]
+    # avgExecutionPrice: typing.Optional[str]
+    # errorCode: typing.Optional[str]
+    # errorMessage: typing.Optional[str]
     price: typing.Optional[str]
     clientOrderId: typing.Optional[str]
-    stopPrice: typing.Optional[str]
-    fills: typing.Optional[
-        typing.List[RestResponseOrderFill]
-    ]
+    # stopPrice: typing.Optional[str]
+    # fills: typing.Optional[
+        # typing.List[RestResponseOrderFill]
+    # ]
 
 
 @dataclass

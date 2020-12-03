@@ -4,7 +4,7 @@ from hummingbot.connector.exchange.idex.utils import EXCHANGE_NAME
 
 CENTRALIZED = True
 
-EXAMPLE_PAIR = "DIL-ETH"
+EXAMPLE_PAIR = "IDEX-ETH"
 
 DEFAULT_FEES = [0.1, 0.2]
 

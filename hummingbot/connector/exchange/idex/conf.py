@@ -23,7 +23,7 @@ def clean_ws_api_url(s: "Settings"):
 class Settings:
     rest_api_url: str = "https://api-sandbox.idex.io/v1"
     ws_api_url: str = "wss://websocket-sandbox.idex.io/v1"
-    eth_account_private_key: str = None
+    eth_account_private_key: str = "0x3952043cbb4217a5cf45e6518f40bfce245c6d8b227039c4102ab8a09dd9dbd8"
 
     def __post_init__(self):
         inflect_env(self)

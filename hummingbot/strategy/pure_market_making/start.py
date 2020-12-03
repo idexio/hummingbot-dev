@@ -16,6 +16,7 @@ from decimal import Decimal
 
 
 def start(self):
+    self.logger().info("Start PMM...")
     try:
         order_amount = c_map.get("order_amount").value
         order_refresh_time = c_map.get("order_refresh_time").value

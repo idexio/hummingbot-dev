@@ -7,11 +7,14 @@ from ..enums import *
 
 @dataclass
 class RestRequestCancelOrder:
-    wallet: str
+    wallet: str = None
     nonce: typing.Optional[str] = None
     orderId: typing.Optional[str] = None
-    market: typing.Optional[str] = None
 
+@dataclass
+class RestRequestCancelAllOrders:
+    wallet: str = None
+    nonce: typing.Optional[str] = None
 
 @dataclass
 class RestRequestCancelOrdersBody:
@@ -113,13 +116,13 @@ class RestRequestAllOrderParameters:
     side: typing.Optional[OrderSide] = None
     nonce: typing.Optional[str] = None
     quantity: typing.Optional[str] = None
-    quoteOrderQuantity: typing.Optional[str] = None
+    # quoteOrderQuantity: typing.Optional[str] = None
     price: typing.Optional[str] = None
-    stopPrice: typing.Optional[str] = None
+    # stopPrice: typing.Optional[str] = None
     clientOrderId: typing.Optional[str] = None
     timeInForce: typing.Optional[OrderTimeInForce] = None
-    selfTradePrevention: typing.Optional[OrderSelfTradePrevention] = "gtc"
-    cancelAfter: typing.Optional[typing.Union[int, float]] = "dc"
+    selfTradePrevention: typing.Optional[OrderSelfTradePrevention] = "dc"
+    # cancelAfter: typing.Optional[typing.Union[int, float]] = "dc"
 
 
 @dataclass

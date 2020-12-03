@@ -14,8 +14,7 @@ class IdexInFlightOrder(InFlightOrderBase):
     """
 
     def __init__(self,
-                 client_order_id: str,
-                 exchange_order_id: Optional[str],
+                 order_id: str,
                  trading_pair: str,
                  order_type: OrderType,
                  trade_type: TradeType,
@@ -24,8 +23,7 @@ class IdexInFlightOrder(InFlightOrderBase):
                  initial_state: str = "open"):
         """
 
-        :param client_order_id:
-        :param exchange_order_id:
+        :param order_id:
         :param trading_pair:
         :param order_type:
         :param trade_type:
@@ -34,8 +32,7 @@ class IdexInFlightOrder(InFlightOrderBase):
         :param initial_state:  open, partiallyFilled, filled, canceled, rejected
         """
         super().__init__(
-            client_order_id,
-            exchange_order_id,
+            order_id,
             trading_pair,
             order_type,
             trade_type,
@@ -67,7 +64,6 @@ class IdexInFlightOrder(InFlightOrderBase):
         TODO: Validate it
         """
         result = IdexInFlightOrder(
-            data["clientOrderId"],
             data["orderId"],
             data["market"],
             from_idex_order_type(data["type"]),
@@ -93,7 +89,7 @@ class IdexInFlightOrder(InFlightOrderBase):
         """
         trade_id = trade_update["tradeId"]
         # trade_update["orderId"] is type int
-        if str(trade_update["order_id"]) != self.exchange_order_id or trade_id in self.trade_id_set:
+        if str(trade_update["order_id"]) != self.order_id or trade_id in self.trade_id_set:
             # trade already recorded
             return False
         self.trade_id_set.add(trade_id)

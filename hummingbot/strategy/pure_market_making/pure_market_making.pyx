@@ -325,6 +325,7 @@ cdef class PureMarketMakingStrategy(StrategyBase):
 
     @property
     def base_asset(self):
+        self.logger().info(f"BASE_ASSET: {self._market_info.base_asset}")
         return self._market_info.base_asset
 
     @property
@@ -805,8 +806,11 @@ cdef class PureMarketMakingStrategy(StrategyBase):
 
             # Adjust buy order size to use remaining balance if less than the order amount
             if quote_balance < quote_size:
+                self.logger().info(f"------------: (baseBalance: {base_balance} quoteBalance: {quote_balance} buyPrice: {buy.price} buyFeePercent: {buy_fee.percent})")
                 adjusted_amount = quote_balance / (buy.price * (Decimal("1") + buy_fee.percent))
+                self.logger().info(f"AAAA: ({adjusted_amount})")
                 adjusted_amount = market.c_quantize_order_amount(self.trading_pair, adjusted_amount)
+                self.logger().info(f"bbbbbb: ({adjusted_amount})")
                 self.logger().info(f"Not enough balance for buy order (Size: {buy.size.normalize()}, Price: {buy.price.normalize()}), "
                                    f"order_amount is adjusted to {adjusted_amount}")
                 buy.size = adjusted_amount
@@ -1142,10 +1146,14 @@ cdef class PureMarketMakingStrategy(StrategyBase):
                 price_quote_str = [f"{sell.size.normalize()} {self.base_asset}, "
                                    f"{sell.price.normalize()} {self.quote_asset}"
                                    for sell in proposal.sells]
+                self.logger().info(f"2proposal sells: {proposal.sells}")
                 self.logger().info(
                     f"({self.trading_pair}) Creating {len(proposal.sells)} ask "
                     f"orders at (Size, Price): {price_quote_str}"
                 )
+                self.logger().info(f"aaa market_info: {self._market_info}")
+                self.logger().info(f"aaa _limit_order_type: {self._limit_order_type}")
+                self.logger().info(f"aaa expiration_seconds: {expiration_seconds}")
             for sell in proposal.sells:
                 ask_order_id = self.c_sell_with_specific_market(
                     self._market_info,
@@ -1154,6 +1162,7 @@ cdef class PureMarketMakingStrategy(StrategyBase):
                     price=sell.price,
                     expiration_seconds=expiration_seconds
                 )
+
                 orders_created = True
         if orders_created:
             self.set_timers()
