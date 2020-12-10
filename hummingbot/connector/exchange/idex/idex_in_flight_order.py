@@ -1,7 +1,7 @@
 import asyncio
 
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from hummingbot.connector.exchange.idex.utils import from_idex_order_type, from_idex_trade_type
 from hummingbot.core.event.events import OrderType, TradeType
@@ -15,6 +15,7 @@ class IdexInFlightOrder(InFlightOrderBase):
 
     def __init__(self,
                  order_id: str,
+                 exchange_order_id: str,
                  trading_pair: str,
                  order_type: OrderType,
                  trade_type: TradeType,
@@ -24,6 +25,7 @@ class IdexInFlightOrder(InFlightOrderBase):
         """
 
         :param order_id:
+        :param exchange_order_id:
         :param trading_pair:
         :param order_type:
         :param trade_type:
@@ -33,6 +35,7 @@ class IdexInFlightOrder(InFlightOrderBase):
         """
         super().__init__(
             order_id,
+            exchange_order_id,
             trading_pair,
             order_type,
             trade_type,
@@ -65,6 +68,7 @@ class IdexInFlightOrder(InFlightOrderBase):
         """
         result = IdexInFlightOrder(
             data["orderId"],
+            "",
             data["market"],
             from_idex_order_type(data["type"]),
             from_idex_trade_type(data["side"]),

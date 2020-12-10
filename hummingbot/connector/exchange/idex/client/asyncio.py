@@ -2,6 +2,8 @@ import json
 import typing
 import functools
 
+import requests
+
 from asyncio import sleep
 from dataclasses import dataclass, asdict
 from urllib.parse import urlencode
@@ -30,10 +32,10 @@ def json_default(value):
 
 
 def rest_decorator(call,
-         request_cls: typing.Type = None,
-         response_cls: typing.Type = None,
-         method: str = "get",
-         signed: bool = False):
+                   request_cls: typing.Type = None,
+                   response_cls: typing.Type = None,
+                   method: str = "get",
+                   signed: bool = False):
     def decorator(f):
         @functools.wraps(f)
         async def rest_decorator_wrapper(self, **kwargs):
@@ -141,8 +143,10 @@ class AsyncBaseClient:
         signed_request = auth.generate_auth_dict_for_get(f"{endpoint}/wsToken", params={
             "wallet": wallet
         })
-        resp = await self.session.get(**signed_request)
-        result = await resp.json()
+        # resp = await self.session.get(**signed_request)
+        # result = await resp.json()
+        resp = requests.get(**signed_request)
+        result = resp.json()
         if resp.status != 200 or not isinstance(result, dict):
             raise RemoteApiError(
                 code="Undefined error",
@@ -170,7 +174,9 @@ class AsyncBaseClient:
         if self.session.closed:
             self.session = ClientSession()
 
-        wallet = wallet or Account.from_key(settings.eth_account_private_key).address
+        if self.auth:
+            wallet = wallet or Account.from_key(self.auth.wallet_private_key).address
+
         url = settings.ws_api_url
         async with self.session.ws_connect(url) as ws:
             subscription_request = {
@@ -224,7 +230,7 @@ class AsyncBaseClient:
                       data: typing.Union[dict, typing.Any] = None,
                       request_cls: typing.Type = None,
                       response_cls: typing.Type = None,
-                      signed: bool =False,
+                      signed: bool = False,
                       wallet_signature: str = None):
 
         # Re init session if closed
@@ -246,8 +252,6 @@ class AsyncBaseClient:
         }
         body = None
 
-        print(endpoint)
-
         if signed:
             signed_payload = self.auth.generate_auth_dict(
                 method,
@@ -265,28 +269,36 @@ class AsyncBaseClient:
             body = json.dumps(data, default=json_default)
 
         # TODO: Move to logging
-        if method.lower() == "get":
-            print(f"{method.upper()}: {url}")
-        else:
-            print(f"{method.upper()}: {url} with {body}")
+        # if method.lower() == "get":
+        #     print(f"{method.upper()}: {url}")
+        # else:
+        #     print(f"{method.upper()}: {url} with {body}")
 
         async with self.session as session:
             try:
-                resp = await session.request(
-                    method, url, headers=headers, data=body
-                )
-                print(f"response: method ({method}) url ({url}) status ({resp.status})")
+                # resp = await session.request(
+                #     method, url, headers=headers, data=body
+                # )
+                if session is None:
+                    print('No Session')
+                if method.lower() == "get":
+                    resp = requests.get(url, headers=headers, data=body)
+                elif method.lower() == "post":
+                    resp = requests.post(url, headers=headers, data=body)
+                elif method.lower() == "delete":
+                    resp = requests.delete(url, headers=headers, data=body)
+                status = resp.status_code
                 # Raise 429
-                if resp.status == 429:
+                if status == 429:
                     raise TooManyRequestError()
                 # Raise if not 200
-                if resp.status != 200:
+                if status != 200:
                     resp_body = await resp.content.read()
                     raise RemoteApiError(
                         code="RESPONSE_ERROR",
-                        message=f"Got unexpected response with status `{resp.status}` and `{resp_body}` body"
+                        message=f"Got unexpected response with status `{status}` and `{resp_body}` body"
                     )
-                result = await resp.json()
+                result = resp.json()
                 if isinstance(result, dict) and set(result.keys()) == {"code", "message"}:
                     raise RemoteApiError(
                         code=result["code"],
@@ -419,25 +431,14 @@ class User(EndpointGroup):
     async def wallets(self) -> typing.List[response.RestResponseWallet]:
         pass
 
-    async def associate_wallet(self,
-                               nonce: str = None,
-                               wallet: str = None) -> typing.List[response.RestResponseAssociateWallet]:
-        nonce = nonce or IdexAuth.generate_nonce()
-        wallet = wallet or IdexAuth.get_wallet().address
-
-        # Get wallet signature
-        wallet_signature = IdexAuth.wallet_signature(
-            ("uint128", IdexAuth.hex_to_uint128(nonce)),
-            ("address", wallet)
-        )
-
+    async def associate_wallet(self, nonce: str, wallet_address: str, wallet_signature: str) -> typing.List[response.RestResponseAssociateWallet]:
         return await self.client.request(
             method="POST",
             endpoint="wallets",
             data={
                 "parameters": {
                     "nonce": nonce,
-                    "wallet": wallet,
+                    "wallet": wallet_address,
                 },
             },
             signed=True,

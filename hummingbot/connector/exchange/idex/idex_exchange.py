@@ -7,14 +7,14 @@ from dataclasses import asdict
 from decimal import Decimal
 from typing import Optional, List, Dict, Any, AsyncIterable
 
-from async_timeout import timeout
+# from async_timeout import timeout
 
 from hummingbot.connector.exchange_base import ExchangeBase, s_decimal_NaN
 from hummingbot.connector.in_flight_order_base import InFlightOrderBase
-from hummingbot.core.data_type.cancellation_result import CancellationResult
+# from hummingbot.core.data_type.cancellation_result import CancellationResult
 from hummingbot.core.data_type.limit_order import LimitOrder
 from hummingbot.core.data_type.order_book import OrderBook
-from hummingbot.core.event.events import OrderType, TradeType, TradeFee, MarketEvent, BuyOrderCreatedEvent, \
+from hummingbot.core.event.events import OrderType, OrderCancelledEvent, TradeType, TradeFee, MarketEvent, BuyOrderCreatedEvent, \
     SellOrderCreatedEvent, MarketOrderFailureEvent
 from hummingbot.core.network_iterator import NetworkStatus
 from hummingbot.core.utils.async_utils import safe_ensure_future, safe_gather
@@ -25,7 +25,7 @@ from .idex_auth import IdexAuth
 from .idex_in_flight_order import IdexInFlightOrder
 from .idex_order_book_tracker import IdexOrderBookTracker
 from .idex_user_stream_tracker import IdexUserStreamTracker
-from .types.rest.request import RestRequestCancelOrder, RestRequestCancelAllOrders, RestRequestOrder, OrderSide, OrderStatus
+from .types.rest.request import RestRequestCancelOrder, RestRequestCancelAllOrders, RestRequestOrder, OrderSide
 from .types.websocket.response import WebSocketResponseTradeShort, WebSocketResponseBalanceShort, \
     WebSocketResponseL1OrderBookShort, WebSocketResponseL2OrderBookShort
 from .utils import to_idex_pair, to_idex_order_type, create_id, create_nonce, EXCHANGE_NAME, round_to_8_decimals
@@ -41,6 +41,7 @@ class IdexExchange(ExchangeBase):
     def __init__(self,
                  idex_api_key: str,
                  idex_api_secret_key: str,
+                 idex_wallet_private_key: str,
                  trading_pairs: Optional[List[str]] = None,
                  trading_required: bool = True):
         """
@@ -50,9 +51,9 @@ class IdexExchange(ExchangeBase):
         :param trading_required: Whether actual trading is needed.
         """
         super().__init__()
-        print("Instantiating IdexExchange class...")
         self._trading_required = trading_required
-        self._idex_auth: IdexAuth = IdexAuth(idex_api_key, idex_api_secret_key)
+        self._idex_auth: IdexAuth = IdexAuth(idex_api_key, idex_api_secret_key, idex_wallet_private_key)
+        self._account_available_balances = {}  # Dict[asset_name:str, Decimal]
         self._client: AsyncIdexClient = AsyncIdexClient(auth=self._idex_auth)
         self._order_book_tracker = IdexOrderBookTracker(trading_pairs=trading_pairs)
         self._user_stream_tracker = IdexUserStreamTracker(self._idex_auth, trading_pairs)
@@ -69,7 +70,6 @@ class IdexExchange(ExchangeBase):
         self._trading_rules_polling_task = None
         self._last_poll_timestamp = 0
         # self._account_balances = {}  # Dict[asset_name:str, Decimal]
-        # self._account_available_balances = {}  # Dict[asset_name:str, Decimal]
 
     @property
     def tracking_states(self) -> Dict[str, any]:
@@ -135,11 +135,11 @@ class IdexExchange(ExchangeBase):
         )
 
     async def execute_sell(self,
-                          order_id: str,
-                          trading_pair: str,
-                          amount: Decimal,
-                          order_type: OrderType,
-                          price: Optional[Decimal] = s_decimal_NaN):
+                           order_id: str,
+                           trading_pair: str,
+                           amount: Decimal,
+                           order_type: OrderType,
+                           price: Optional[Decimal] = s_decimal_NaN):
         return await self._create_order(
             "sell",
             order_id,
@@ -162,8 +162,8 @@ class IdexExchange(ExchangeBase):
         ))
         return order_id
 
-    def amount_to_precision(self, symbol, amount):
-        return self.decimal_to_precision(amount, TRUNCATE, self.markets[symbol]['precision']['amount'], self.precisionMode, self.paddingMode)
+    # def amount_to_precision(self, symbol, amount):
+        # return self.decimal_to_precision(amount, TRUNCATE, self.markets[symbol]['precision']['amount'], self.precisionMode, self.paddingMode)
 
     def sell(self, trading_pair: str, amount: Decimal, order_type=OrderType.MARKET, price: Decimal = s_decimal_NaN,
              **kwargs):
@@ -185,54 +185,58 @@ class IdexExchange(ExchangeBase):
                             amount: Decimal,
                             order_type=OrderType.MARKET,
                             price: Decimal = s_decimal_NaN):
-        market = await to_idex_pair(trading_pair)
+
         try:
             orderVersion = 1
+            market = await to_idex_pair(trading_pair)
+            if order_type == OrderType.MARKET:
+                typeEnum = 0
+            elif order_type == OrderType.LIMIT:
+                typeEnum = 1
+            elif order_type == OrderType.LIMIT_MAKER:
+                typeEnum = 2
+            else:
+                raise Exception(order_type + " is not a valid order type")
+
             nonce = create_nonce()
             walletBytes = self._idex_auth.get_wallet_bytes()
-            price = round_to_8_decimals(price)
+            price = round_to_8_decimals(price)  # TODO precision
             sideEnum = 0 if (side == 'buy') else 1
-            typeEnum = 2 # TODO this is for limitMaker orders
             amountEnum = 0  # base quantity
-            amountString = round_to_8_decimals(amount) # TODO self.amount_to_precision(symbol, amount)
+            amountString = round_to_8_decimals(amount)  # TODO self.amount_to_precision(symbol, amount)
             timeInForceEnum = 0
             selfTradePreventionEnum = 0
-
 
             byteArray = [
                 IdexAuth.number_to_be(orderVersion, 1),
                 nonce.bytes,
                 IdexAuth.base16_to_binary(walletBytes),
-                IdexAuth.encode(market),  # TODO: refactor to remove either encode or stringToBinary
+                IdexAuth.encode(market),
                 IdexAuth.number_to_be(typeEnum, 1),
                 IdexAuth.number_to_be(sideEnum, 1),
                 IdexAuth.encode(amountString),
                 IdexAuth.number_to_be(amountEnum, 1),
-                IdexAuth.encode(price), # TODO precision
-                IdexAuth.encode(''), # stopPrice
-                IdexAuth.encode(order_id), # clientOrderId
+                IdexAuth.encode(price),
+                IdexAuth.encode(''),  # stopPrice
+                IdexAuth.encode(order_id),  # clientOrderId
                 IdexAuth.number_to_be(timeInForceEnum, 1),
                 IdexAuth.number_to_be(selfTradePreventionEnum, 1),
                 IdexAuth.number_to_be(0, 8),  # unused
             ]
 
-
             binary = IdexAuth.binary_concat_array(byteArray)
             hash = IdexAuth.hash(binary, 'keccak', 'hex')
-            print(f"POST Order hash: {hash}")
             signature = self._idex_auth.sign_message_string(hash, IdexAuth.binary_to_base16(self._idex_auth.get_wallet().key))
 
-            print("creating order..................")
-
-            # TODO track order?
-            # self.start_tracking_order(order_id,
-            #                       None,
-            #                       trading_pair,
-            #                       trade_type,
-            #                       price,
-            #                       amount,
-            #                       order_type
-            #                       )
+            self.start_tracking_order(
+                order_id,
+                "",
+                market,
+                TradeType.BUY if (side == 'buy') else TradeType.SELL,
+                price,
+                amount,
+                order_type
+            )
 
             result = await self._client.trade.create_order(
                 parameters=RestRequestOrder(
@@ -250,7 +254,6 @@ class IdexExchange(ExchangeBase):
                 signature=signature
             )
             print(f"....................CREATED ORDER.......: {result}")
-            orderId = result.orderId
             if result.status != "rejected" and result.status != "cancelled":
                 event_tag = MarketEvent.BuyOrderCreated if side == "buy" else MarketEvent.SellOrderCreated
                 event_class = BuyOrderCreatedEvent if side == "buy" else SellOrderCreatedEvent
@@ -291,6 +294,7 @@ class IdexExchange(ExchangeBase):
 
     def start_tracking_order(self,
                              order_id: str,
+                             exchange_order_id: str,
                              trading_pair: str,
                              trade_type: TradeType,
                              price: Decimal,
@@ -299,9 +303,9 @@ class IdexExchange(ExchangeBase):
         """
         Starts tracking an order by simply adding it into _in_flight_orders dictionary.
         """
-        self.logger().info(f"!!!!!!!!!!!! Start tracking order !!!!!!!!!!!!!!!!!11: {order_id}")
         self._in_flight_orders[order_id] = IdexInFlightOrder(
             order_id=order_id,
+            exchange_order_id=exchange_order_id,
             trading_pair=trading_pair,
             order_type=order_type,
             trade_type=trade_type,
@@ -312,29 +316,39 @@ class IdexExchange(ExchangeBase):
     def cancel(self, trading_pair: str, order_id: str):
         safe_ensure_future(self._cancel_order(trading_pair, order_id))
 
-    async def _cancel_order(self, trading_pair: str, order_id: str):
-        market = await to_idex_pair(trading_pair)
+    async def _cancel_order(self, trading_pair: str, client_order_id: str):
+        # market = await to_idex_pair(trading_pair)
         nonce = create_nonce()
         walletBytes = self._idex_auth.get_wallet_bytes()
         byteArray = [
             nonce.bytes,
             IdexAuth.base16_to_binary(walletBytes),
-            IdexAuth.encode("client:" + order_id),
+            IdexAuth.encode("client:" + client_order_id),
         ]
         binary = IdexAuth.binary_concat_array(byteArray)
         hash = IdexAuth.hash(binary, 'keccak', 'hex')
-        self.logger().info(f"Cancel order id: {order_id}")
-        self.logger().info(f"Cancel order hash: {hash}")
+        self.logger().info(f"Cancel order id: {client_order_id}")
         signature = self._idex_auth.sign_message_string(hash, IdexAuth.binary_to_base16(self._idex_auth.get_wallet().key))
-        self.logger().info(f"Signature: {signature}")
         await self._client.trade.cancel_order(
             parameters=RestRequestCancelOrder(
                 wallet=self._idex_auth.get_wallet().address,
-                orderId="client:" + order_id,
+                orderId="client:" + client_order_id,
                 nonce=str(nonce),
             ),
             signature=signature
         )
+        # TODO confirm order was cancelled
+        tracked_order = self._in_flight_orders.get(client_order_id)
+        self.trigger_event(
+            MarketEvent.OrderCancelled,
+            OrderCancelledEvent(
+                self.current_timestamp,
+                client_order_id
+            )
+        )
+        tracked_order.cancelled_event.set()
+        self.stop_tracking_order(client_order_id)
+        return client_order_id
 
     async def get_order(self, client_order_id: str) -> Dict[str, Any]:
         order = self._in_flight_orders.get(client_order_id)
@@ -349,16 +363,18 @@ class IdexExchange(ExchangeBase):
 
     async def check_network(self) -> NetworkStatus:
         try:
-            self.logger().info("!!!!!!!!----------------Check_network() ...")
             result = await self._client.public.get_ping()
+            # await result.text()
             assert result == {}
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as e:
+            self.logger().info(f"Failed network status check.... {e}")
             return NetworkStatus.NOT_CONNECTED
         return NetworkStatus.CONNECTED
 
     async def start_network(self):
+        print("Start network...")
         await self.stop_network()
         self._order_book_tracker.start()
         if self._trading_required:
@@ -415,7 +431,7 @@ class IdexExchange(ExchangeBase):
     def status_dict(self) -> Dict[str, bool]:
         account_balance_status = False
         if (self._account_balances is not None):
-            account_balance_status =  len(self._account_balances) > 0 if self._trading_required else True
+            account_balance_status = len(self._account_balances) > 0 if self._trading_required else True
         result = {
             "order_books_initialized": self._order_book_tracker.ready,
             # "account_balance": len(self._account_balances) > 0 if self._trading_required else True,
@@ -430,11 +446,11 @@ class IdexExchange(ExchangeBase):
 
     @property
     def ready(self) -> bool:
-        print(f"READY: {self.status_dict} {self._account_balances}")
+        # print(f"READY: {self.status_dict} {self._account_balances}")
         return all(self.status_dict.values())
 
     @property
-    def in_flight_orders(self)  -> Dict[str, InFlightOrderBase]:
+    def in_flight_orders(self) -> Dict[str, InFlightOrderBase]:
         return self._in_flight_orders
 
     async def cancel_all(self, timeout_seconds: float):
@@ -454,9 +470,7 @@ class IdexExchange(ExchangeBase):
         ]
         binary = IdexAuth.binary_concat_array(byteArray)
         hash = IdexAuth.hash(binary, 'keccak', 'hex')
-        self.logger().info(f"Cancel order hash: {hash}")
         signature = self._idex_auth.sign_message_string(hash, IdexAuth.binary_to_base16(self._idex_auth.get_wallet().key))
-        self.logger().info(f"Signature: {signature}")
         await self._client.trade.cancel_order(
             parameters=RestRequestCancelAllOrders(
                 wallet=self._idex_auth.get_wallet().address,
@@ -511,35 +525,47 @@ class IdexExchange(ExchangeBase):
         if order_id in self._in_flight_orders:
             del self._in_flight_orders[order_id]
 
-    _account_available_balances = None
-    _account_balances = None
-
     async def _update_balances(self, sender=None):
         # self._account_available_balances = self._account_available_balances or {}
         # self._account_balances = self._account_balances or {}
+        print("Update Balances...")
         balances_available = {}
         balances = {}
+
         wallets = await self._client.user.wallets()
-        print(f"Wallets: {wallets}")
+
+        wallet_address = self._idex_auth.get_wallet().address
+        is_wallet_associated = False
         for wallet in wallets:
-            accounts = await self._client.user.balances(wallet=wallet.address)
-            for account in accounts:
-                # Set available balance
-                balances_available.setdefault(wallet.address, {})
-                balances_available[wallet.address][account.asset] = Decimal(account.availableForTrade)
-                # Set balance
-                balances.setdefault(wallet.address, {})
-                balances[wallet.address][account.asset] = Decimal(account.quantity)
+            if wallet.address == wallet_address:
+                is_wallet_associated = True
 
+        if is_wallet_associated is False:
+            nonce = create_nonce()
+            byteArray = [
+                nonce.bytes,
+                IdexAuth.base16_to_binary(self._idex_auth.get_wallet_bytes()),
+            ]
+            binary = IdexAuth.binary_concat_array(byteArray)
+            hash = IdexAuth.hash(binary, 'keccak', 'hex')
+            signature = self._idex_auth.sign_message_string(hash, IdexAuth.binary_to_base16(self._idex_auth.get_wallet().key))
+            await self._client.user.associate_wallet(str(nonce), wallet_address=wallet_address, wallet_signature=signature)
 
-        # self._account_available_balances[asset_name] = Decimal(str(account["available"]))
-        # self._account_balances[asset_name] = Decimal(str(account["balance"]))
+        # for wallet in wallets:
+        accounts = await self._client.user.balances(wallet=wallet_address)
+        print(f"balances... {accounts}")
+        if len(accounts) == 0:
+            raise Exception("Wallet does not have any token balances. Please deposit some tokens.")
+        for account in accounts:
+            # Set available balance
+            balances_available.setdefault(wallet_address, {})
+            balances_available[wallet_address][account.asset] = Decimal(account.availableForTrade)
+            self._account_available_balances[account.asset] = Decimal(account.availableForTrade)
 
-        print(f"balances_available: {balances_available}")
-        self._account_available_balances = balances_available["0xFB5bC78Bac1482511251fc7EFaB9eA8cFD15968c"]
-        self._account_balances = balances["0xFB5bC78Bac1482511251fc7EFaB9eA8cFD15968c"]
-        a = balances_available["0xFB5bC78Bac1482511251fc7EFaB9eA8cFD15968c"]
-        self._cheese1 = balances_available["0xFB5bC78Bac1482511251fc7EFaB9eA8cFD15968c"]
+            # Set balance
+            balances.setdefault(wallet_address, {})
+            balances[wallet_address][account.asset] = Decimal(account.quantity)
+            self._account_balances[account.asset] = Decimal(account.quantity)
 
     def get_balance(self, currency: str) -> Decimal:
         """
@@ -547,6 +573,7 @@ class IdexExchange(ExchangeBase):
         :return: A balance for the given currency (token)
         """
         wallet = self._idex_auth.get_wallet()
+        # print(f"get_balance: walletAddress: {wallet.address} currency: {currency}")
         return self._account_balances[wallet.address].get(currency, Decimal(0))
 
     async def _iter_user_event_queue(self) -> AsyncIterable[Dict[str, any]]:
@@ -581,9 +608,12 @@ class IdexExchange(ExchangeBase):
 
             print(f"USEL: {event}")
 
+            # TODO
+            """
             if isinstance(event, WebSocketResponseBalanceShort):
                 self._account_balances[event.w][event.a] = Decimal(str(event.q))
                 self._account_available_balances[event.w][event.a] = Decimal(str(event.f))
+            """
 
             # try:
             #     if "result" not in event_message or "channel" not in event_message["result"]:
