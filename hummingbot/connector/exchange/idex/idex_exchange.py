@@ -15,10 +15,14 @@ from hummingbot.connector.in_flight_order_base import InFlightOrderBase
 from hummingbot.core.data_type.limit_order import LimitOrder
 from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.core.event.events import OrderType, OrderCancelledEvent, TradeType, TradeFee, MarketEvent, BuyOrderCreatedEvent, \
-    SellOrderCreatedEvent, MarketOrderFailureEvent
+    SellOrderCreatedEvent, MarketOrderFailureEvent, BuyOrderCompletedEvent, SellOrderCompletedEvent
 from hummingbot.core.network_iterator import NetworkStatus
 from hummingbot.core.utils.async_utils import safe_ensure_future, safe_gather
 from hummingbot.core.utils.estimate_fee import estimate_fee
+
+from .types.enums import OrderStatus
+
+from .client.exceptions import ResourceNotFoundError
 
 from .client.asyncio import AsyncIdexClient
 from .idex_auth import IdexAuth
@@ -26,8 +30,8 @@ from .idex_in_flight_order import IdexInFlightOrder
 from .idex_order_book_tracker import IdexOrderBookTracker
 from .idex_user_stream_tracker import IdexUserStreamTracker
 from .types.rest.request import RestRequestCancelOrder, RestRequestCancelAllOrders, RestRequestOrder, OrderSide
-from .types.websocket.response import WebSocketResponseTradeShort, WebSocketResponseBalanceShort, \
-    WebSocketResponseL1OrderBookShort, WebSocketResponseL2OrderBookShort
+from .types.websocket.response import WebSocketResponseTradeShort, \
+    WebSocketResponseOrderShort
 from .utils import to_idex_pair, to_idex_order_type, create_id, create_nonce, EXCHANGE_NAME, round_to_8_decimals
 
 
@@ -37,6 +41,7 @@ class IdexExchange(ExchangeBase):
 
     SHORT_POLL_INTERVAL = 5.0
     LONG_POLL_INTERVAL = 120.0
+    UPDATE_ORDER_STATUS_MIN_INTERVAL = 10.0
 
     def __init__(self,
                  idex_api_key: str,
@@ -69,7 +74,6 @@ class IdexExchange(ExchangeBase):
         self._user_stream_event_listener_task = None
         self._trading_rules_polling_task = None
         self._last_poll_timestamp = 0
-        # self._account_balances = {}  # Dict[asset_name:str, Decimal]
 
     @property
     def tracking_states(self) -> Dict[str, any]:
@@ -178,6 +182,15 @@ class IdexExchange(ExchangeBase):
         ))
         return order_id
 
+    async def _fetch_order(self, order_id: str):
+        nonce = create_nonce()
+        order = await self._client.trade.get_orders(
+            wallet=self._idex_auth.get_wallet().address,
+            nonce=str(nonce),
+            orderId=order_id,
+        )
+        return order
+
     async def _create_order(self,
                             side: OrderSide,
                             order_id: str,
@@ -228,16 +241,6 @@ class IdexExchange(ExchangeBase):
             hash = IdexAuth.hash(binary, 'keccak', 'hex')
             signature = self._idex_auth.sign_message_string(hash, IdexAuth.binary_to_base16(self._idex_auth.get_wallet().key))
 
-            self.start_tracking_order(
-                order_id,
-                "",
-                market,
-                TradeType.BUY if (side == 'buy') else TradeType.SELL,
-                price,
-                amount,
-                order_type
-            )
-
             result = await self._client.trade.create_order(
                 parameters=RestRequestOrder(
                     wallet=self._idex_auth.get_wallet().address,
@@ -253,6 +256,17 @@ class IdexExchange(ExchangeBase):
                 ),
                 signature=signature
             )
+
+            self.start_tracking_order(
+                order_id,  # client_order_id
+                result.orderId,  # exchange_order_id
+                market,
+                TradeType.BUY if (side == 'buy') else TradeType.SELL,
+                price,
+                amount,
+                order_type
+            )
+
             print(f"....................CREATED ORDER.......: {result}")
             if result.status != "rejected" and result.status != "cancelled":
                 event_tag = MarketEvent.BuyOrderCreated if side == "buy" else MarketEvent.SellOrderCreated
@@ -374,7 +388,6 @@ class IdexExchange(ExchangeBase):
         return NetworkStatus.CONNECTED
 
     async def start_network(self):
-        print("Start network...")
         await self.stop_network()
         self._order_book_tracker.start()
         if self._trading_required:
@@ -403,10 +416,9 @@ class IdexExchange(ExchangeBase):
                 await self._poll_notifier.wait()
                 await safe_gather(
                     self._update_balances("_status_polling_loop"),
-                    asyncio.sleep(1),
+                    self._update_order_status(),
                     asyncio.sleep(1),
                     # self._update_order_fills_from_trades(), # TODO: TBI
-                    # self._update_order_status(),  # TODO: TBI
                 )
                 self._last_poll_timestamp = self.current_timestamp
             except asyncio.CancelledError:
@@ -434,7 +446,6 @@ class IdexExchange(ExchangeBase):
             account_balance_status = len(self._account_balances) > 0 if self._trading_required else True
         result = {
             "order_books_initialized": self._order_book_tracker.ready,
-            # "account_balance": len(self._account_balances) > 0 if self._trading_required else True,
             "account_balance": account_balance_status,
             # "trading_rule_initialized": len(self._trading_rules) > 0, # TODO: Implement _trading_rules_polling_task
             "user_stream_initialized": self._user_stream_tracker.data_source.last_recv_time > 0 if self._trading_required else True,
@@ -446,12 +457,130 @@ class IdexExchange(ExchangeBase):
 
     @property
     def ready(self) -> bool:
-        # print(f"READY: {self.status_dict} {self._account_balances}")
         return all(self.status_dict.values())
 
     @property
     def in_flight_orders(self) -> Dict[str, InFlightOrderBase]:
         return self._in_flight_orders
+
+    async def _update_order_status(self):
+        """
+        Calls REST API to get status update for each in-flight order.
+        """
+        last_tick = self._last_poll_timestamp / self.UPDATE_ORDER_STATUS_MIN_INTERVAL
+        current_tick = self.current_timestamp / self.UPDATE_ORDER_STATUS_MIN_INTERVAL
+
+        if current_tick > last_tick and len(self._in_flight_orders) > 0:
+            tracked_orders = list(self._in_flight_orders.values())
+            tasks = []
+            for tracked_order in tracked_orders:
+                tasks.append(self._fetch_order(order_id=tracked_order.exchange_order_id))
+            orders = await safe_gather(*tasks, return_exceptions=True)
+
+            for index, order in enumerate(orders):
+                if isinstance(order, ResourceNotFoundError):
+                    tracked_order = tracked_orders[index]
+                    client_order_id = tracked_order.client_order_id
+                    self.trigger_event(MarketEvent.OrderCancelled,
+                                       OrderCancelledEvent(
+                                           self.current_timestamp,
+                                           tracked_order.client_order_id))
+                    tracked_order.cancelled_event.set()
+                    self.stop_tracking_order(client_order_id)
+                    continue
+                self._process_order_message(client_order_id=order.client_order_id, status=order.status)
+
+    # async def _process_trade_message(self, trade_msg: Dict[str, Any]):
+    #     """
+    #     Updates in-flight order and trigger order filled event for trade message received. Triggers order completed
+    #     event if the total executed amount equals to the specified order amount.
+    #     """
+    #     for order in self._in_flight_orders.values():
+    #         await order.get_exchange_order_id()
+    #     track_order = [o for o in self._in_flight_orders.values() if trade_msg["order_id"] == o.exchange_order_id]
+    #     if not track_order:
+    #         return
+    #     tracked_order = track_order[0]
+    #     updated = tracked_order.update_with_trade_update(trade_msg)
+    #     if not updated:
+    #         return
+    #     self.trigger_event(
+    #         MarketEvent.OrderFilled,
+    #         OrderFilledEvent(
+    #             self.current_timestamp,
+    #             tracked_order.client_order_id,
+    #             tracked_order.trading_pair,
+    #             tracked_order.trade_type,
+    #             tracked_order.order_type,
+    #             Decimal(str(trade_msg["traded_price"])),
+    #             Decimal(str(trade_msg["traded_quantity"])),
+    #             TradeFee(0.0, [(trade_msg["fee_currency"], Decimal(str(trade_msg["fee"])))]),
+    #             exchange_trade_id=trade_msg["order_id"]
+    #         )
+    #     )
+    #     if math.isclose(tracked_order.executed_amount_base, tracked_order.amount) or \
+    #             tracked_order.executed_amount_base >= tracked_order.amount:
+    #         tracked_order.last_state = "FILLED"
+    #         self.logger().info(f"The {tracked_order.trade_type.name} order "
+    #                            f"{tracked_order.client_order_id} has completed "
+    #                            f"according to order status API.")
+    #         event_tag = MarketEvent.BuyOrderCompleted if tracked_order.trade_type is TradeType.BUY \
+    #             else MarketEvent.SellOrderCompleted
+    #         event_class = BuyOrderCompletedEvent if tracked_order.trade_type is TradeType.BUY \
+    #             else SellOrderCompletedEvent
+    #         self.trigger_event(event_tag,
+    #                            event_class(self.current_timestamp,
+    #                                        tracked_order.client_order_id,
+    #                                        tracked_order.base_asset,
+    #                                        tracked_order.quote_asset,
+    #                                        tracked_order.fee_asset,
+    #                                        tracked_order.executed_amount_base,
+    #                                        tracked_order.executed_amount_quote,
+    #                                        tracked_order.fee_paid,
+    #                                        tracked_order.order_type))
+    #         self.stop_tracking_order(tracked_order.client_order_id)
+
+    def _process_order_message(self, client_order_id: str, status: OrderStatus):
+        """
+        Updates in-flight order and triggers cancellation or failure event if needed.
+        :param order_msg: The order response from either REST or web socket API (they are of the same format)
+        """
+        if client_order_id not in self._in_flight_orders:
+            return
+        tracked_order = self._in_flight_orders[client_order_id]
+        print(f"_process_order_message tracked_order: {tracked_order}")
+        if status == "canceled":
+            self.trigger_event(MarketEvent.OrderCancelled,
+                               OrderCancelledEvent(
+                                   self.current_timestamp,
+                                   tracked_order.client_order_id))
+            tracked_order.cancelled_event.set()
+            self.stop_tracking_order(client_order_id)
+        elif status == "rejected":
+            self.trigger_event(MarketEvent.OrderFailure,
+                               MarketOrderFailureEvent(
+                                   self.current_timestamp,
+                                   tracked_order.client_order_id,
+                                   tracked_order.order_type
+                               ))
+            self.stop_tracking_order(client_order_id)
+        elif status == "filled":
+            event_tag = MarketEvent.BuyOrderCompleted if tracked_order.trade_type is TradeType.BUY \
+                else MarketEvent.SellOrderCompleted
+            event_class = BuyOrderCompletedEvent if tracked_order.trade_type is TradeType.BUY \
+                else SellOrderCompletedEvent
+            self.trigger_event(event_tag,
+                               event_class(self.current_timestamp,
+                                           tracked_order.client_order_id,
+                                           tracked_order.base_asset,
+                                           tracked_order.quote_asset,
+                                           tracked_order.fee_asset,
+                                           tracked_order.executed_amount_base,
+                                           tracked_order.executed_amount_quote,
+                                           tracked_order.fee_paid,
+                                           tracked_order.order_type))
+        elif status == "active" or status == "open" or status == "partiallyFilled":
+            print("active or partiallyFilled")
 
     async def cancel_all(self, timeout_seconds: float):
         """
@@ -481,30 +610,6 @@ class IdexExchange(ExchangeBase):
 
         return []
 
-        # self.logger().info(self._in_flight_orders.values())
-        # incomplete_orders = [o for o in self._in_flight_orders.values() if not o.is_done]
-        # tasks = [self._execute_cancel(o.trading_pair, o.client_order_id, True) for o in incomplete_orders]
-        # order_id_set = set([o.client_order_id for o in incomplete_orders])
-        # successful_cancellations = []
-        # try:
-        #     async with timeout(timeout_seconds):
-        #         results = await safe_gather(*tasks, return_exceptions=True)
-        #         for result in results:
-        #             if result is not None and not isinstance(result, Exception):
-        #                 order_id_set.remove(result)
-        #                 successful_cancellations.append(CancellationResult(result, True))
-        # except Exception as e:
-        #     print(f"Cancel_all orders error: {e}")
-        #     self.logger().error("Cancel all failed.", exc_info=True)
-        #     self.logger().network(
-        #         "Unexpected error cancelling orders.",
-        #         exc_info=True,
-        #         app_warning_msg="Failed to cancel order on Crypto.com. Check API key and network connection."
-        #     )
-
-        # failed_cancellations = [CancellationResult(oid, False) for oid in order_id_set]
-        # return successful_cancellations + failed_cancellations
-
     def tick(self, timestamp: float):
         """
         Is called automatically by the clock for each clock's tick (1 second by default).
@@ -526,9 +631,6 @@ class IdexExchange(ExchangeBase):
             del self._in_flight_orders[order_id]
 
     async def _update_balances(self, sender=None):
-        # self._account_available_balances = self._account_available_balances or {}
-        # self._account_balances = self._account_balances or {}
-        print("Update Balances...")
         balances_available = {}
         balances = {}
 
@@ -594,19 +696,17 @@ class IdexExchange(ExchangeBase):
     async def _user_stream_event_listener(self):
         """
         TODO: implement trade absorb
-        TODO: implement order absorb
-
-        :return:
         """
         async for event in self._iter_user_event_queue():
             if not isinstance(event, (
+                    # WebSocketResponseL2OrderBookShort,
                     WebSocketResponseTradeShort,
-                    WebSocketResponseBalanceShort,
-                    WebSocketResponseL1OrderBookShort,
-                    WebSocketResponseL2OrderBookShort)):
+                    # WebSocketResponseBalanceShort,
+                    # WebSocketResponseL1OrderBookShort,
+                    WebSocketResponseOrderShort)):
                 continue
 
-            print(f"USEL: {event}")
+            print(f"USER WS EVENT: {event}")
 
             # TODO
             """
@@ -614,6 +714,8 @@ class IdexExchange(ExchangeBase):
                 self._account_balances[event.w][event.a] = Decimal(str(event.q))
                 self._account_available_balances[event.w][event.a] = Decimal(str(event.f))
             """
+            if isinstance(event, WebSocketResponseOrderShort):
+                self._process_order_message(event.c, event.X)
 
             # try:
             #     if "result" not in event_message or "channel" not in event_message["result"]:

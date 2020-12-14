@@ -60,7 +60,6 @@ cdef class MarketBase(NetworkIterator):
             self.c_add_listener(event_tag.value, self._event_logger)
 
         self._account_balances = {}  # Dict[asset_name:str, Decimal]
-        print("Instantiating marketBase..................")
         self._account_available_balances = {}  # Dict[asset_name:str, Decimal]
         self._asset_limit = {}  # Dict[asset_name: str, Decimal]
         self._real_time_balance_update = True
@@ -439,7 +438,6 @@ cdef class MarketBase(NetworkIterator):
         return self.c_cancel(trading_pair, client_order_id)
 
     def get_available_balance(self, currency: str) -> Decimal:
-        self.logger().info(f"^^^^^^^^^^^^^")
         return self.c_get_available_balance(currency)
 
     def withdraw(self, address: str, currency: str, amount: Decimal) -> str:

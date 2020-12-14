@@ -317,8 +317,7 @@ cdef class ConnectorBase(NetworkIterator):
         return actual_available
 
     cdef object c_get_available_balance(self, str currency):
-        a = self.get_available_balance(currency)
-        return a
+        return self.get_available_balance(currency)
 
     def get_available_balance(self, currency: str) -> Decimal:
         """

@@ -2,7 +2,7 @@ import typing
 
 from dataclasses import dataclass
 
-from ..enums import *
+from ..enums import OrderSelfTradePrevention, OrderTimeInForce, OrderType, OrderSide
 
 
 @dataclass
@@ -11,10 +11,12 @@ class RestRequestCancelOrder:
     nonce: typing.Optional[str] = None
     orderId: typing.Optional[str] = None
 
+
 @dataclass
 class RestRequestCancelAllOrders:
     wallet: str = None
     nonce: typing.Optional[str] = None
+
 
 @dataclass
 class RestRequestCancelOrdersBody:
@@ -41,10 +43,10 @@ class RestRequestFindBalances:
     asset: typing.Optional[str] = None
 
 
-@dataclass
-class RestRequestFindCandles(RestRequestFindWithPagination):
-    market: str
-    interval: CandleInterval
+# @dataclass
+# class RestRequestFindCandles(RestRequestFindWithPagination):
+#     market: str
+#     interval: CandleInterval
 
 
 @dataclass
@@ -81,10 +83,10 @@ class RestRequestFindOrder(RestRequestFindByWallet):
 
 
 @dataclass
-class RestRequestFindOrders(RestRequestFindByWallet, RestRequestFindWithPagination):
-    market: typing.Optional[str]
-    closed: typing.Optional[bool]
-    fromId: typing.Optional[str]
+class RestRequestFindOrders():
+    nonce: str
+    orderId: str
+    wallet: str
 
 
 @dataclass

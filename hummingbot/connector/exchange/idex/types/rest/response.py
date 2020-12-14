@@ -1,7 +1,8 @@
 import typing
 from dataclasses import dataclass
 
-from ..enums import *
+from ..enums import OrderSelfTradePrevention, OrderTimeInForce, EthTransactionStatus, \
+    OrderSide, Liquidity, MarketStatus, OrderStatus, OrderType
 
 
 @dataclass
@@ -115,7 +116,7 @@ class RestResponseOrder:
     clientOrderId: typing.Optional[str]
     # stopPrice: typing.Optional[str]
     # fills: typing.Optional[
-        # typing.List[RestResponseOrderFill]
+    # typing.List[RestResponseOrderFill]
     # ]
 
 

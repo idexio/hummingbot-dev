@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from aiohttp import ClientSession, WSMsgType, WSMessage
 from eth_account import Account
 
-from .exceptions import RemoteApiError, TooManyRequestError
+from .exceptions import RemoteApiError, TooManyRequestError, ResourceNotFoundError
 from ..conf import settings
 from ..idex_auth import IdexAuth
 from ..types.rest import request
@@ -268,12 +268,6 @@ class AsyncBaseClient:
         else:
             body = json.dumps(data, default=json_default)
 
-        # TODO: Move to logging
-        # if method.lower() == "get":
-        #     print(f"{method.upper()}: {url}")
-        # else:
-        #     print(f"{method.upper()}: {url} with {body}")
-
         async with self.session as session:
             try:
                 # resp = await session.request(
@@ -291,6 +285,8 @@ class AsyncBaseClient:
                 # Raise 429
                 if status == 429:
                     raise TooManyRequestError()
+                if status == 404:
+                    raise ResourceNotFoundError()
                 # Raise if not 200
                 if status != 200:
                     resp_body = await resp.content.read()
@@ -372,14 +368,14 @@ class Market(EndpointGroup):
                           regionOnly: typing.Optional[bool] = None) -> typing.List[response.RestResponseTicker]:
         pass
 
-    @rest.get("candles", request.RestRequestFindCandles, response.RestResponseCandle)
-    async def get_candles(self, *,
-                          market: str,
-                          interval: request.CandleInterval,
-                          start: typing.Optional[int] = None,
-                          end: typing.Optional[int] = None,
-                          limit: typing.Optional[int] = None) -> typing.List[response.RestResponseCandle]:
-        pass
+    # @rest.get("candles", request.RestRequestFindCandles, response.RestResponseCandle)
+    # async def get_candles(self, *,
+    #                       market: str,
+    #                       interval: request.CandleInterval,
+    #                       start: typing.Optional[int] = None,
+    #                       end: typing.Optional[int] = None,
+    #                       limit: typing.Optional[int] = None) -> typing.List[response.RestResponseCandle]:
+    #     pass
 
     @rest.get("trades", request.RestRequestFindTrades, response.RestResponseTrade)
     async def get_trades(self, *,
@@ -406,10 +402,11 @@ class Trade(EndpointGroup):
                            parameters: request.RestRequestOrder) -> response.RestResponseOrder:
         pass
 
-    @rest.signed.get("orders", request.RestRequestFindOrder, response.RestResponseOrder)
-    async def get_order(self,
-                        orderId: str) -> typing.Union[typing.List[response.RestResponseOrder],
-                                                      response.RestResponseOrder]:
+    @rest.signed.get("orders", request.RestRequestFindOrders, response.RestResponseOrder)
+    async def get_orders(self,
+                         wallet: str,
+                         nonce: str,
+                         orderId: str) -> typing.Union[typing.List[response.RestResponseOrder], response.RestResponseOrder]:
         pass
 
     @rest.signed.delete("orders", request.RestRequestCancelOrdersBody, response.RestResponseCanceledOrderItem)
