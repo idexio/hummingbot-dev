@@ -289,10 +289,11 @@ class AsyncBaseClient:
                     raise ResourceNotFoundError()
                 # Raise if not 200
                 if status != 200:
-                    resp_body = await resp.content.read()
+                    # resp_body = await resp.content.read()
+                    print(f"Response error: {resp.json()}")
                     raise RemoteApiError(
                         code="RESPONSE_ERROR",
-                        message=f"Got unexpected response with status `{status}` and `{resp_body}` body"
+                        message=f"Got unexpected response with status `{status}` and `{resp.json()}` body"
                     )
                 result = resp.json()
                 if isinstance(result, dict) and set(result.keys()) == {"code", "message"}:
