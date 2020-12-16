@@ -488,7 +488,7 @@ class IdexExchange(ExchangeBase):
                     tracked_order.cancelled_event.set()
                     self.stop_tracking_order(client_order_id)
                     continue
-                self._process_order_message(client_order_id=order.client_order_id, status=order.status)
+                self._process_order_message(client_order_id=order.clientOrderId, status=order.status)
 
     # async def _process_trade_message(self, trade_msg: Dict[str, Any]):
     #     """
