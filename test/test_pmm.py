@@ -551,6 +551,23 @@ class PMMUnitTest(unittest.TestCase):
         self.assertEqual(Decimal("97.5001"), strategy.active_buys[0].price)
         self.assertEqual(Decimal("102.499"), strategy.active_sells[0].price)
 
+    def test_order_optimization_with_multiple_order_levels(self):
+        # Widening the order book, top bid is now 97.5 and top ask 102.5
+        simulate_order_book_widening(self.book_data.order_book, 98, 102)
+        strategy = self.multi_levels_strategy
+        strategy.order_optimization_enabled = True
+        strategy.order_level_spread = Decimal("0.025")
+        self.clock.add_iterator(strategy)
+        self.clock.backtest_til(self.start_timestamp + self.clock_tick_size)
+        self.assertEqual(3, len(strategy.active_buys))
+        self.assertEqual(3, len(strategy.active_sells))
+        self.assertEqual(Decimal("97.5001"), strategy.active_buys[0].price)
+        self.assertEqual(Decimal("102.499"), strategy.active_sells[0].price)
+        self.assertEqual(strategy.active_buys[1].price / strategy.active_buys[0].price, Decimal("0.975"))
+        self.assertEqual(strategy.active_buys[2].price / strategy.active_buys[0].price, Decimal("0.95"))
+        self.assertEqual(strategy.active_sells[1].price / strategy.active_sells[0].price, Decimal("1.025"))
+        self.assertEqual(strategy.active_sells[2].price / strategy.active_sells[0].price, Decimal("1.05"))
+
     def test_hanging_orders(self):
         strategy = self.one_level_strategy
         strategy.order_refresh_time = 4.0
@@ -891,8 +908,12 @@ class PMMUnitTest(unittest.TestCase):
         self.assertAlmostEqual(Decimal("97"), last_bid_order.price, 2)
         self.assertAlmostEqual(Decimal("103"), last_ask_order.price, 2)
 
-        ConfigCommand.update_running_pure_mm(strategy, "bid_spread", Decimal('2'))
-        ConfigCommand.update_running_pure_mm(strategy, "ask_spread", Decimal('2'))
+        ConfigCommand.update_running_mm(strategy, "bid_spread", Decimal('2'))
+        ConfigCommand.update_running_mm(strategy, "ask_spread", Decimal('2'))
+        for order in strategy.active_sells:
+            strategy.cancel_order(order.client_order_id)
+        for order in strategy.active_buys:
+            strategy.cancel_order(order.client_order_id)
         self.clock.backtest_til(self.start_timestamp + 7)
         first_bid_order = strategy.active_buys[0]
         first_ask_order = strategy.active_sells[0]
