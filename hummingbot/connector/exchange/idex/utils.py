@@ -53,8 +53,8 @@ async def to_idex_pair(pair: str) -> Optional[str]:
     # pattern = await get_trading_pair_splitter()
     # matcher = pattern.match(pair)
     # if matcher:
-        # print(f"DONE PAIR: {matcher.group(1)}-{matcher.group(2)}")
-        # return f"{matcher.group(1)}-{matcher.group(2)}"
+    # print(f"DONE PAIR: {matcher.group(1)}-{matcher.group(2)}")
+    # return f"{matcher.group(1)}-{matcher.group(2)}"
     # return None
 
 

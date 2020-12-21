@@ -10,6 +10,7 @@ connector_status = {
     'celo': 'green',
     'coinbase_pro': 'green',
     'crypto_com': 'yellow',
+    'dydx': 'yellow',
     'eterbase': 'red',
     'ethereum': 'red',
     'huobi': 'green',
@@ -17,8 +18,9 @@ connector_status = {
     'kraken': 'yellow',
     'kucoin': 'green',
     'liquid': 'green',
-    'loopring': 'green',
-    'okex': 'red'
+    'loopring': 'yellow',
+    'okex': 'red',
+    'terra': 'yellow'
 }
 
 warning_messages = {
