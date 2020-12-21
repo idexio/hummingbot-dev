@@ -214,7 +214,7 @@ class IdexExchange(ExchangeBase):
             nonce = create_nonce()
             walletBytes = self._idex_auth.get_wallet_bytes()
             price = round_to_8_decimals(price)  # TODO precision
-            # sideEnum = 0 if (side == 'buy') else 1
+            sideEnum = 0 if (side == 'buy') else 1
             amountEnum = 0  # base quantity
             amountString = round_to_8_decimals(amount)  # TODO self.amount_to_precision(symbol, amount)
             timeInForceEnum = 0
@@ -226,6 +226,7 @@ class IdexExchange(ExchangeBase):
                 IdexAuth.base16_to_binary(walletBytes),
                 IdexAuth.encode(market),
                 IdexAuth.number_to_be(typeEnum, 1),
+                IdexAuth.number_to_be(sideEnum, 1),
                 IdexAuth.encode(amountString),
                 IdexAuth.number_to_be(amountEnum, 1),
                 IdexAuth.encode(price),
@@ -235,6 +236,7 @@ class IdexExchange(ExchangeBase):
                 IdexAuth.number_to_be(selfTradePreventionEnum, 1),
                 IdexAuth.number_to_be(0, 8),  # unused
             ]
+
             binary = IdexAuth.binary_concat_array(byteArray)
             hash = IdexAuth.hash(binary, 'keccak', 'hex')
             signature = self._idex_auth.sign_message_string(hash, IdexAuth.binary_to_base16(self._idex_auth.get_wallet().key))
