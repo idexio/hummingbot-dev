@@ -274,7 +274,6 @@ cdef class MarketBase(NetworkIterator):
         If there is a budget limit set on the balance
         :returns: Balance available for trading for a specific asset
         """
-        self.logger().info(f"!!!!!!!!!!!!!!!: {self._account_available_balances}")
         available_balance = self._account_available_balances.get(currency, s_decimal_0)
         if not self._real_time_balance_update:
             available_balance = self.apply_balance_update_since_snapshot(currency, available_balance)
@@ -439,7 +438,6 @@ cdef class MarketBase(NetworkIterator):
         return self.c_cancel(trading_pair, client_order_id)
 
     def get_available_balance(self, currency: str) -> Decimal:
-        self.logger().info(f"^^^^^^^^^^^^^")
         return self.c_get_available_balance(currency)
 
     def withdraw(self, address: str, currency: str, amount: Decimal) -> str:

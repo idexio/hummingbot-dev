@@ -54,8 +54,6 @@ cdef class ConnectorBase(NetworkIterator):
         # for _in_flight_orders_snapshot and _in_flight_orders_snapshot_timestamp when the update user balances.
         self._in_flight_orders_snapshot = {}  # Dict[order_id:str, InFlightOrderBase]
         self._in_flight_orders_snapshot_timestamp = 0.0
-        self._cheese1 = "Apple"
-        self._cheese2 = "Butter"
 
     @property
     def real_time_balance_update(self) -> bool:
@@ -319,8 +317,7 @@ cdef class ConnectorBase(NetworkIterator):
         return actual_available
 
     cdef object c_get_available_balance(self, str currency):
-        a = self.get_available_balance(currency)
-        return a
+        return self.get_available_balance(currency)
 
     def get_available_balance(self, currency: str) -> Decimal:
         """
@@ -333,13 +330,8 @@ cdef class ConnectorBase(NetworkIterator):
         available_balance = self._account_available_balances.get(currency, s_decimal_0)
         """
 
-        """
-        available_balance = self._cheese1.get(currency, s_decimal_0)
-        """
+        available_balance = self._account_available_balances.get(currency, s_decimal_0)
 
-        available_balance = self._cheese1.get("DIL")
-
-        self.logger().info(f"Available_Balance: {available_balance}")
         if not self._real_time_balance_update:
             available_balance = self.apply_balance_update_since_snapshot(currency, available_balance)
         balance_limits = self.get_exchange_limit_config(self.name)

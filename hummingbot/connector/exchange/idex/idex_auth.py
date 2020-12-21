@@ -13,16 +13,15 @@ from eth_account.messages import encode_defunct
 from eth_account.signers.local import LocalAccount
 from web3 import Web3
 
-from hummingbot.connector.exchange.idex.conf import settings
-
 
 class IdexAuth:
 
     HEX_DIGITS_SET = set(string.hexdigits)
 
-    def __init__(self, api_key: str, secret_key: str):
+    def __init__(self, api_key: str, secret_key: str, wallet_private_key: str):
         self.api_key = api_key
         self.secret_key = secret_key
+        self.wallet_private_key = wallet_private_key
 
     @staticmethod
     def remove0x_prefix(value):
@@ -91,7 +90,6 @@ class IdexAuth:
             result = result + element
         return result
 
-
     @staticmethod
     def number_to_le(n, size):
         return IdexAuth.decimal_to_bytes(int(n), 'little').ljust(size, b'\x00')
@@ -102,9 +100,7 @@ class IdexAuth:
         return '0x' + IdexAuth.decode(base64.b16encode(hash_bytes)).lower()
 
     def sign_message_string(self, message, privateKey):
-        # Web3(Web3.HTTPProvider(ethereum_rpc_url))
         signed_message = Account.sign_message(encode_defunct(hexstr=message), private_key=privateKey)
-        # return signature['r'] + IdexAuth.remove0x_prefix(signature['s']) + IdexAuth.binary_to_base16(IdexAuth.number_to_be(signature['v'], 1))
         return signed_message.signature.hex()
 
     def sign(self, data: Union[str, bytes]) -> str:
@@ -123,17 +119,6 @@ class IdexAuth:
         return int(value, 16)
 
     @classmethod
-    def get_wallet(cls, private_key: str = None) -> LocalAccount:
-        private_key = private_key or settings.eth_account_private_key
-        return Account.from_key(private_key)
-
-    @classmethod
-    def get_wallet_bytes(cls, private_key: str = None) -> str:
-        private_key = private_key or settings.eth_account_private_key
-        return IdexAuth.remove0x_prefix(Account.from_key(private_key).address)
-
-
-    @classmethod
     def wallet_signature(cls, *parameters: Tuple[str, Any], private_key: str = None):
         fields = [item[0] for item in parameters]
         values = [item[1] for item in parameters]
@@ -148,6 +133,14 @@ class IdexAuth:
     @staticmethod
     def generate_nonce():
         return str(uuid.uuid1())
+
+    def get_wallet(self, private_key: str = None) -> LocalAccount:
+        private_key = private_key or self.wallet_private_key
+        return Account.from_key(private_key)
+
+    def get_wallet_bytes(self, private_key: str = None) -> str:
+        private_key = private_key or self.wallet_private_key
+        return IdexAuth.remove0x_prefix(Account.from_key(private_key).address)
 
     def generate_auth_dict(
             self,
