@@ -77,7 +77,7 @@ class CoinbaseProAPIOrderBookDataSource(OrderBookTrackerDataSource):
             return result
 
     @staticmethod
-    async def get_trading_pairs() -> List[str]:
+    async def fetch_trading_pairs() -> List[str]:
         try:
             async with aiohttp.ClientSession() as client:
                 async with client.get(f"{COINBASE_REST_URL}/products/", timeout=5) as response:
@@ -129,7 +129,7 @@ class CoinbaseProAPIOrderBookDataSource(OrderBookTrackerDataSource):
         """
         *required
         Initializes order books and order book trackers for the list of trading pairs 
-        returned by `self.fetch_trading_pairs`
+        returned by `self.get_trading_pairs`
         :returns: A dictionary of order book trackers for each trading pair
         """
         # Get the currently active markets
