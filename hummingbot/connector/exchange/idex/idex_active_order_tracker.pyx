@@ -50,15 +50,15 @@ cdef class IdexActiveOrderTracker:
         For a certain price, get the volume sum of all ask order book rows with that price
         :returns: volume sum
         """
-        #Confirm "remaining_size as property name"
+        # todo: Confirm "remaining_size as property name"
         return sum([float(msg["remaining_size"]) for msg in self._active_asks[price].values()])
 
-    def volume_for_bid_price(self,price) -> float:
+    def volume_for_bid_price(self, price) -> float:
         """
         For a certain price, get the volume sum of all bid order book rows with that price
         :returns: volume sum
         """
-        #Confirm "remaining_size as property name"
+        # todo: Confirm "remaining_size as property name"
         return sum([float(msg["remaining_size"]) for msg in self._active_bids[price].values()])
 
     def get_rates_and_quantities(self, entry) -> tuple:
@@ -70,7 +70,7 @@ cdef class IdexActiveOrderTracker:
         Interpret an incoming diff message and apply changes to the order book accordingly
         :returns: new order book rows: Tuple(np.array (bids), np.array (asks))
         """
-        
+
         cdef:
             dict content = message.content
             list bid_entries = []
@@ -126,7 +126,7 @@ cdef class IdexActiveOrderTracker:
         timestamp = message.timestamp
         content = message.content
 
-        for snapshot_orders, active_orders in [(content["bids"], self._active_bids), 
+        for snapshot_orders, active_orders in [(content["bids"], self._active_bids),
                                                (content["asks"], self._active_asks)]:
             for order in snapshot_orders:
                 price, amount = self.get_rates_and_quantities(order)
