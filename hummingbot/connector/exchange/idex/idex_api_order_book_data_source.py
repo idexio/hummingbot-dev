@@ -90,7 +90,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
     @classmethod
     @cachetools.func.ttl_cache(ttl=10)
-    def get_mid_price(cls, trading_pair: str) -> Optional[Decimal]:
+    async def get_mid_price(cls, trading_pair: str) -> Optional[Decimal]:
         async with aiohttp.ClientSession() as client:
             # IDEX API does not provide individual ask/bid request capability.
             # Must search for trading_pair each time get_mid_price is called.
