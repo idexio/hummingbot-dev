@@ -24,7 +24,8 @@ from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
 from hummingbot.client.config.global_config_map import global_config_map
 
-# from hummingbot.core.utils.async_utils import safe_gather  # todo alf: only one request needed for many trade_pairs ?
+# import with change to get_last_traded_prices
+from hummingbot.core.utils.async_utils import safe_gather  # todo alf: only one request needed for many trade_pairs ?
 
 from hummingbot.connector.exchange.idex.idex_active_order_tracker import IdexActiveOrderTracker
 from hummingbot.connector.exchange.idex.idex_order_book_tracker_entry import IdexOrderBookTrackerEntry
@@ -71,22 +72,22 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
             )
         return cls._IDEX_WS_FEED
 
+    # Found last trading price in Idex API. Utilized safe_gather to complete all tasks and append last trade prices
+    # for all trading pairs on results list.
     @classmethod
     async def get_last_traded_prices(cls, trading_pairs: List[str]) -> Dict[str, float]:
-        # trading_pairs already provided in the parameter.
-        # Require an additional GET request for prices. Will zip both lists together to product Dict.
+        base_url: str = cls.get_idex_rest_url()
+        tasks = [cls.get_last_traded_price(t_pair, base_url) for t_pair in trading_pairs]
+        results = await safe_gather(*tasks)
+        return {t_pair: result for t_pair, result in zip(trading_pairs, results)}
+
+    @classmethod
+    async def get_last_traded_price(cls, trading_pair: str, base_url: str = "com") -> float:
         async with aiohttp.ClientSession() as client:
-            base_url: str = cls.get_idex_rest_url()
-            ticker_url: str = f"{base_url}/v1/tickers"
-            resp = await client.get(ticker_url)
-            markets = await resp.json()
-            # lastFillPrice not provided in IDEX API as of 25 February 2021.
-            # "ask" price is used as stand-in value at this time.
-            raw_trading_pair_prices: List[float] = list(map(lambda details: details.get('ask'), markets))
-            trading_pair_price_list: List[float] = list()
-            for raw_trading_pair_price in raw_trading_pair_prices:
-                trading_pair_price_list.append(raw_trading_pair_price)
-            return {trading_pair: price for trading_pair, price in zip(trading_pairs, trading_pair_price_list)}
+            resp = await client.get(f"{base_url}/v1/trades/?market={trading_pair}")
+            resp_json = await resp.json()
+            last_trade = resp_json.pop()
+            return float(last_trade["price"])
 
     @classmethod
     @cachetools.func.ttl_cache(ttl=10)
