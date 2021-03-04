@@ -5,6 +5,8 @@ from typing import List
 from unittest.mock import patch, PropertyMock, AsyncMock
 from decimal import Decimal
 
+import aiohttp
+
 from test.integration.assets.mock_data.fixture_idex import FixtureIdex
 from hummingbot.connector.exchange.idex.idex_api_order_book_data_source import IdexAPIOrderBookDataSource
 
@@ -125,6 +127,17 @@ class TestDataSource (unittest.TestCase):
                 self.eth_order_book_data_source.get_mid_price(t_pair))
             self.assertEqual(Decimal("0.016175005"), t_pair_mid_price)
 
-    #@patch(REST_URL, new_callable=PropertyMock)
-    #@patch(GET_MOCK, new_callable=AsyncMock)
-    #def test_get_snapshot(self):
+    @patch(REST_URL, new_callable=PropertyMock)
+    @patch(GET_MOCK, new_callable=AsyncMock)
+    async def test_get_snapshot(self, mocked_get, mocked_API_URL):
+        async with aiohttp.ClientSession() as client:
+            mocked_API_URL.return_value = "https://api-eth.idex.io"
+            mocked_get.return_value.json.return_value = FixtureIdex.ORDER_BOOK_LEVEL2
+            mocked_get.return_value.status = 200
+            snapshot: List[str] = await self.run_async(self.eth_order_book_data_source.get_snapshot(client, "UNI-ETH"))
+            self.assertEqual(FixtureIdex.ORDER_BOOK_LEVEL2, snapshot)
+            await client.close()
+
+
+
+
