@@ -93,13 +93,11 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
             last_trade = resp_json[-1]
             return float(last_trade["price"])
 
-    @staticmethod
+    @classmethod
     @cachetools.func.ttl_cache(ttl=10)
-    async def get_mid_price(trading_pair: str) -> Optional[Decimal]:
+    async def get_mid_price(cls, trading_pair: str) -> Optional[Decimal]:
         async with aiohttp.ClientSession() as client:
-            base_url: str = IDEX_REST_URL_FMT.format(
-                blockchain=global_config_map['idex_contract_blockchain'].value
-            )
+            base_url: str = cls.get_idex_rest_url()
             ticker_url: str = f"{base_url}/v1/tickers?market={trading_pair}"
             resp = await client.get(ticker_url)
             market = await resp.json()
@@ -129,14 +127,16 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
         return []
 
-    @classmethod
-    async def get_snapshot(cls, client: aiohttp.ClientSession, trading_pair: str) -> Dict[str, Any]:
+    @staticmethod
+    async def get_snapshot(client: aiohttp.ClientSession, trading_pair: str) -> Dict[str, Any]:
         """
         Fetches order book snapshot for a particular trading pair from the rest API
         :returns: Response from the rest API
         """
         # idex level 2 order book is sufficient to provide required data
-        base_url: str = cls.get_idex_rest_url()
+        base_url: str = IDEX_REST_URL_FMT.format(
+                blockchain=global_config_map['idex_contract_blockchain'].value
+            )
         product_order_book_url: str = f"{base_url}/v1/orderbook?market={trading_pair}&level=2"
         async with client.get(product_order_book_url) as response:
             response: aiohttp.ClientResponse = response
