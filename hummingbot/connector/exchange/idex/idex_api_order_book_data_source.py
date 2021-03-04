@@ -104,12 +104,13 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                         result = (Decimal(market['bid']) + Decimal(market['ask'])) / Decimal("2")
                         return result
 
-    @staticmethod
-    async def fetch_trading_pairs() -> List[str]:
+    # changed to classmethod to accomodate cls.get_idex_rest_url()
+    @classmethod
+    async def fetch_trading_pairs(cls) -> List[str]:
         try:
             async with aiohttp.ClientSession() as client:
                 # ensure IDEX_REST_URL has appropriate blockchain imported (ETH or BSC)
-                base_url: str = IDEX_REST_URL_FMT.format(blockchain=global_config_map['idex_contract_blockchain'].value)
+                base_url: str = cls.get_idex_rest_url()
                 async with client.get(f"{base_url}/v1/tickers", timeout=5) as response:
                     if response.status == 200:
                         markets = await response.json()
