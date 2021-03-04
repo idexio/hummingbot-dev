@@ -1,10 +1,11 @@
 import asyncio
 import aiohttp
 import unittest
+import ujson
 
 from typing import List
 from unittest.mock import patch
-from unittest.mock import PropertyMock
+from unittest.mock import PropertyMock, AsyncMock
 
 from test.integration.assets.mock_data.fixture_idex import FixtureIdex
 from hummingbot.connector.exchange.idex.idex_api_order_book_data_source import IdexAPIOrderBookDataSource
@@ -12,12 +13,12 @@ from hummingbot.connector.exchange.idex.idex_api_order_book_data_source import I
 
 class TestDataSource (unittest.TestCase):
 
-    eth_trading_pairs: List[str] = [
+    eth_sample_pairs: List[str] = [
         "UNI-ETH",
         "LBA-ETH"
     ]
 
-    bsc_trading_pairs: List[str] = [
+    bsc_sample_pairs: List[str] = [
         "EOS-USDT",
         "BTCB-BNB"
     ]
@@ -73,6 +74,7 @@ class TestDataSource (unittest.TestCase):
                 self.eth_order_book_data_source.fetch_trading_pairs())
             self.assertIn("UNI-ETH", trading_pairs)
             self.assertIn("LBA-ETH", trading_pairs)
+            # possible to use map to iterate through trading pairs list. However, commented out for readability.
             #map(lambda sample_pair : self.assertIn(sample_pair, trading_pairs), self.eth_sample_pairs)
             # BSC URL
             mocked_API_URL.return_value = "https://api-bsc.idex.io"
@@ -80,3 +82,20 @@ class TestDataSource (unittest.TestCase):
                 self.bsc_order_book_data_source.fetch_trading_pairs())
             self.assertIn("EOS-USDT", trading_pairs)
             self.assertIn("BTCB-BNB", trading_pairs)
+
+    def test_get_last_traded_price(self):
+        with patch('hummingbot.connector.exchange.idex.idex_api_order_book_data_source.aiohttp.ClientSession.get',
+                   new_callable=AsyncMock) as mocked_get:
+            # ETH URL
+            mocked_get.return_value.json.return_value = FixtureIdex.TRADING_PAIR_TRADES
+            last_traded_price: float = self.run_async(
+                self.eth_order_book_data_source.get_last_traded_price("UNI-ETH", "https://api-eth.idex.io"))
+            self.assertEqual(0.01780000, last_traded_price)
+
+
+    #def test_get_last_traded_prices(self, trading_pairs):
+    #    with patch(self.REST_URL, new_callable=PropertyMock) as mocked_API_URL:
+    #        # ETH URL
+    #        mocked_API_URL.return_value = "https://api-eth.idex.io"
+    #        trading_pairs: List[str] = self.run_async(
+    #            self.eth_order_book_data_source.get_last_traded_prices())

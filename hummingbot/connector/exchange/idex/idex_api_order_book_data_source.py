@@ -82,7 +82,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
         return {t_pair: result for t_pair, result in zip(trading_pairs, results)}
 
     @classmethod
-    async def get_last_traded_price(cls, trading_pair: str, base_url: str = "com") -> float:
+    async def get_last_traded_price(cls, trading_pair: str, base_url: str = "https://api-eth.idex.io") -> float:
         async with aiohttp.ClientSession() as client:
             resp = await client.get(f"{base_url}/v1/trades/?market={trading_pair}")
             resp_json = await resp.json()

@@ -51,6 +51,36 @@ class FixtureIdex:
         ]
     }
 
+    TRADING_PAIR_TRADES = [
+        {
+            "fillId": "3e3a7887-2c20-3705-95f4-8a64892612f3",
+            "price": "0.00729011",
+            "quantity": "200.00000000",
+            "quoteQuantity": "1.45802200",
+            "time": 1612385689385,
+            "makerSide": "buy",
+            "sequence": 7
+        },
+        {
+            "fillId": "71ae1754-b92d-336c-9e82-15e1be7f3e01",
+            "price": "0.01429000",
+            "quantity": "37.21253813",
+            "quoteQuantity": "0.53176716",
+            "time": 1613839046778,
+            "makerSide": "sell",
+            "sequence": 8
+        },
+        {
+            "fillId": "4b6a09ec-6fd5-3eb5-ba76-1ce2f1f85c4e",
+            "price": "0.01780000",
+            "quantity": "115.84889933",
+            "quoteQuantity": "2.06211040",
+            "time": 1614860652110,
+            "makerSide": "sell",
+            "sequence": 9
+        }
+    ]
+
     BUY_MARKET_ORDER = None
 
     WS_AFTER_BUY_1 = None
