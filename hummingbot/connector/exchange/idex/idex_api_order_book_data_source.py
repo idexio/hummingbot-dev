@@ -86,6 +86,9 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
         async with aiohttp.ClientSession() as client:
             resp = await client.get(f"{base_url}/v1/trades/?market={trading_pair}")
             resp_json = await resp.json()
+            # based on previous GET requests to the Idex trade URL, the most recent trade is located at the -1 index
+            # of the returned list of trades. This assumes pop() on the returned list is the optimal solution for
+            # retrieving the latest trade.
             last_trade = resp_json.pop()
             return float(last_trade["price"])
 
