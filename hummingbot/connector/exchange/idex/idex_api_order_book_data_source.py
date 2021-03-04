@@ -56,6 +56,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
     def __init__(self, trading_pairs: List[str]):
         super().__init__(trading_pairs)
 
+    # in testing, get_idex_rest_url and get_idex_ws_feed both return None when run.
     @classmethod
     def get_idex_rest_url(cls) -> str:
         if cls._IDEX_REST_URL is None:
@@ -81,8 +82,8 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
         results = await safe_gather(*tasks)
         return {t_pair: result for t_pair, result in zip(trading_pairs, results)}
 
-    @classmethod
-    async def get_last_traded_price(cls, trading_pair: str, base_url: str = "https://api-eth.idex.io") -> float:
+    @staticmethod
+    async def get_last_traded_price(trading_pair: str, base_url: str = "https://api-eth.idex.io") -> float:
         async with aiohttp.ClientSession() as client:
             resp = await client.get(f"{base_url}/v1/trades/?market={trading_pair}")
             resp_json = await resp.json()
@@ -92,29 +93,27 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
             last_trade = resp_json[-1]
             return float(last_trade["price"])
 
-    @classmethod
+    @staticmethod
     @cachetools.func.ttl_cache(ttl=10)
-    async def get_mid_price(cls, trading_pair: str) -> Optional[Decimal]:
+    async def get_mid_price(trading_pair: str) -> Optional[Decimal]:
         async with aiohttp.ClientSession() as client:
-            # IDEX API does not provide individual ask/bid request capability.
-            # Must search for trading_pair each time get_mid_price is called.
-            base_url: str = cls.get_idex_rest_url()
-            ticker_url: str = f"{base_url}/v1/tickers"
+            base_url: str = IDEX_REST_URL_FMT.format(
+                blockchain=global_config_map['idex_contract_blockchain'].value
+            )
+            ticker_url: str = f"{base_url}/v1/tickers?market={trading_pair}"
             resp = await client.get(ticker_url)
-            markets = await resp.json()
-            for market in markets:
-                if market.get('market') == trading_pair:
-                    if market.get('bid') and market.get('ask'):
-                        result = (Decimal(market['bid']) + Decimal(market['ask'])) / Decimal("2")
-                        return result
+            market = await resp.json()
+            if market.get('bid') and market.get('ask'):
+                result = (Decimal(market['bid']) + Decimal(market['ask'])) / Decimal('2')
+                # Result will be in the form: Decimal("result") - confirm that is
+                return result
 
-    # changed to classmethod to accomodate cls.get_idex_rest_url()
-    @classmethod
-    async def fetch_trading_pairs(cls) -> List[str]:
+    @staticmethod
+    async def fetch_trading_pairs() -> List[str]:
         try:
             async with aiohttp.ClientSession() as client:
                 # ensure IDEX_REST_URL has appropriate blockchain imported (ETH or BSC)
-                base_url: str = cls.get_idex_rest_url()
+                base_url: str = IdexAPIOrderBookDataSource.get_idex_rest_url()
                 async with client.get(f"{base_url}/v1/tickers", timeout=5) as response:
                     if response.status == 200:
                         markets = await response.json()
@@ -130,15 +129,14 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
         return []
 
-    @staticmethod
-    async def get_snapshot(client: aiohttp.ClientSession, trading_pair: str) -> Dict[str, Any]:
+    @classmethod
+    async def get_snapshot(cls, client: aiohttp.ClientSession, trading_pair: str) -> Dict[str, Any]:
         """
         Fetches order book snapshot for a particular trading pair from the rest API
         :returns: Response from the rest API
         """
-        # update URL to https://api-sandbox-eth.idex.io/v1/orders with appropriate authentication data
-        # to access bids/asks by order ID
-        base_url: str = IDEX_REST_URL_FMT.format(blockchain=global_config_map['idex_contract_blockchain'].value)
+        # idex level 2 order book is sufficient to provide required data
+        base_url: str = cls.get_idex_rest_url()
         product_order_book_url: str = f"{base_url}/v1/orderbook?market={trading_pair}&level=2"
         async with client.get(product_order_book_url) as response:
             response: aiohttp.ClientResponse = response

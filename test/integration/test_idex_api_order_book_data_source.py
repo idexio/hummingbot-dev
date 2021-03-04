@@ -124,3 +124,7 @@ class TestDataSource (unittest.TestCase):
             t_pair_mid_price: List[str] = self.run_async(
                 self.eth_order_book_data_source.get_mid_price(t_pair))
             self.assertEqual(Decimal("0.016175005"), t_pair_mid_price)
+
+    #@patch(REST_URL, new_callable=PropertyMock)
+    #@patch(GET_MOCK, new_callable=AsyncMock)
+    #def test_get_snapshot(self):
