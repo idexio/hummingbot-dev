@@ -81,6 +81,23 @@ class FixtureIdex:
         }
     ]
 
+    TRADING_PAIR_TICKER = {
+        "market": "UNI-ETH",
+        "time": 1614888274602,
+        "open": "0.01780000",
+        "high": "0.01780000",
+        "low": "0.01780000",
+        "close": "0.01780000",
+        "closeQuantity": "115.84889933",
+        "baseVolume": "115.84889933",
+        "quoteVolume": "2.06211040",
+        "percentChange": "0.00",
+        "numTrades": 1,
+        "ask": "0.02480000",
+        "bid": "0.00755001",
+        "sequence": 9
+    }
+
     BUY_MARKET_ORDER = None
 
     WS_AFTER_BUY_1 = None

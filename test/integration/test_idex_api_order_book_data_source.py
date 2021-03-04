@@ -3,6 +3,7 @@ import unittest
 
 from typing import List
 from unittest.mock import patch, PropertyMock, AsyncMock
+from decimal import Decimal
 
 from test.integration.assets.mock_data.fixture_idex import FixtureIdex
 from hummingbot.connector.exchange.idex.idex_api_order_book_data_source import IdexAPIOrderBookDataSource
@@ -105,3 +106,21 @@ class TestDataSource (unittest.TestCase):
             self.eth_order_book_data_source.get_last_traded_prices(self.eth_sample_pairs))
         self.assertEqual({"UNI-ETH": 0.01780000,
                          "LBA-ETH": 0.01780000}, last_traded_prices)
+        # BSC URL
+        mocked_API_URL.return_value = "https://api-bsc.idex.io"
+        mocked_get.return_value.json.return_value = FixtureIdex.TRADING_PAIR_TRADES
+        last_traded_prices: List[str] = self.run_async(
+            self.bsc_order_book_data_source.get_last_traded_prices(self.bsc_sample_pairs))
+        self.assertEqual({"EOS-USDT": 0.01780000,
+                          "BTCB-BNB": 0.01780000}, last_traded_prices)
+
+    @patch(REST_URL, new_callable=PropertyMock)
+    @patch(GET_MOCK, new_callable=AsyncMock)
+    def test_get_mid_price(self, mocked_get, mocked_API_URL):
+        # ETH URL
+        mocked_API_URL.return_value = "https://api-eth.idex.io"
+        mocked_get.return_value.json.return_value = FixtureIdex.TRADING_PAIR_TICKER
+        for t_pair in self.eth_sample_pairs:
+            t_pair_mid_price: List[str] = self.run_async(
+                self.eth_order_book_data_source.get_mid_price(t_pair))
+            self.assertEqual(Decimal("0.016175005"), t_pair_mid_price)
