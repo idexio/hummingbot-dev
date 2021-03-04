@@ -89,7 +89,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
             # based on previous GET requests to the Idex trade URL, the most recent trade is located at the -1 index
             # of the returned list of trades. This assumes pop() on the returned list is the optimal solution for
             # retrieving the latest trade.
-            last_trade = resp_json.pop()
+            last_trade = resp_json[-1]
             return float(last_trade["price"])
 
     @classmethod
