@@ -60,6 +60,9 @@ debug.log
 .vscode/
 .history/
 
+# Virtual Env
+/env
+
 # Documentation build dir
 /documentation/site/
 
