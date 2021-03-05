@@ -137,6 +137,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
         base_url: str = IDEX_REST_URL_FMT.format(
                 blockchain=global_config_map['idex_contract_blockchain'].value
             )
+        # Require additional url parameter: limit = 0 to get the entire orderbook for the trading_pair; default = 500
         product_order_book_url: str = f"{base_url}/v1/orderbook?market={trading_pair}&level=2"
         async with client.get(product_order_book_url) as response:
             response: aiohttp.ClientResponse = response
