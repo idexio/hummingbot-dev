@@ -50,6 +50,7 @@ cdef class IdexActiveOrderTracker:
         For a certain price, get the volume sum of all ask order book rows with that price
         :returns: volume sum
         """
+
         # todo: Confirm "remaining_size as property name"
         return sum([float(msg["remaining_size"]) for msg in self._active_asks[price].values()])
 
@@ -58,6 +59,7 @@ cdef class IdexActiveOrderTracker:
         For a certain price, get the volume sum of all bid order book rows with that price
         :returns: volume sum
         """
+
         # todo: Confirm "remaining_size as property name"
         return sum([float(msg["remaining_size"]) for msg in self._active_bids[price].values()])
 
@@ -144,14 +146,14 @@ cdef class IdexActiveOrderTracker:
                     }
 
         cdef:
-            np.ndarray[np.float64_t, ndim=2] bids = np.array(
+            np.ndarray[np.float64_t, ndim = 2] bids = np.array(
                 [[message.timestamp,
                   price,
                   sum([order_dict["amount"]
                        for order_dict in self._active_bids[price].values()]),
                   message.update_id]
                  for price in sorted(self._active_bids.keys(), reverse=True)], dtype="float64", ndmin=2)
-            np.ndarray[np.float64_t, ndim=2] asks = np.array(
+            np.ndarray[np.float64_t, ndim = 2] asks = np.array(
                 [[message.timestamp,
                   price,
                   sum([order_dict["amount"]
@@ -167,7 +169,7 @@ cdef class IdexActiveOrderTracker:
 
         return bids, asks
 
-    cdef np.ndarray[np.float64_t, ndim=1] c_convert_trade_message_to_np_array(self, object message):
+    cdef np.ndarray[np.float64_t, ndim = 1] c_convert_trade_message_to_np_array(self, object message):
         cdef:
             double trade_type_value = 2.0
 
