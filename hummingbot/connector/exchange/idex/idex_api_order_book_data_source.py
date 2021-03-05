@@ -333,8 +333,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                         if msg_type is None:
                             raise ValueError(f"Idex WebSocket message does not contain a type - {msg}")
                         elif msg_type == "error":
-                            raise ValueError(f"Idex WebSocket message received error message - "
-                                             f"{msg['data']['message']}")
+                            raise ValueError(f"Idex WebSocket message received error message - {msg['data']['message']}")
                         elif msg_type == "l2orderbook":
                             order_book_message: OrderBookMessage = IdexOrderBook.diff_message_from_exchange(msg)
                             output.put_nowait(order_book_message)
