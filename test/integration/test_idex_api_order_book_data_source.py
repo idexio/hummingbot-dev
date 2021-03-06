@@ -1,30 +1,19 @@
 import asyncio
 import unittest
+import aiohttp
 
 from typing import List
 from unittest.mock import patch, PropertyMock, AsyncMock
-from decimal import Decimal
+from asynctest import CoroutineMock, patch
+from asynctest import TestCase as TestCaseAsync
 
-import aiohttp
+from decimal import Decimal
 
 from test.integration.assets.mock_data.fixture_idex import FixtureIdex
 from hummingbot.connector.exchange.idex.idex_api_order_book_data_source import IdexAPIOrderBookDataSource
 
-# todo alf: attempted mock for aiohttp.ClientSession.get
-# class MockGetResponse():
-#     def __init__(self, text, status):
-#         self._text = text
-#         self.status = status
-#     async def text(self):
-#         return self._text
-#     async def __aenter__(self):
-#         return self
-#     async def __aexit__(self, exc_type, exc, tb):
-#         pass
-
 
 class IdexAPIOrderBookDataSourceUnitTest(unittest.TestCase):
-
 
     eth_sample_pairs: List[str] = [
         "UNI-ETH",
@@ -56,13 +45,13 @@ class IdexAPIOrderBookDataSourceUnitTest(unittest.TestCase):
     # with GET requests to the URL.
     # The appropriate means of testing access to the global_config_map blockchain value should be discussed.
     def test_get_idex_rest_url(self):
-        with patch(self.REST_URL, new_callable=PropertyMock) as mocked_API_URL:
+        with patch(self.REST_URL, new_callable=PropertyMock) as mocked_api_url:
             # ETH URL
-            mocked_API_URL.return_value = "https://api-eth.idex.io"
+            mocked_api_url.return_value = "https://api-eth.idex.io"
             # mocked_REST_URL.assert_called_with(blockchain=global_config_map['idex_contract_blockchain'].value)
             self.assertEqual("https://api-eth.idex.io", IdexAPIOrderBookDataSource.get_idex_rest_url())
             # BSC URL
-            mocked_API_URL.return_value = "https://api-bsc.idex.io"
+            mocked_api_url.return_value = "https://api-bsc.idex.io"
             # mocked_REST_URL.assert_called_with(blockchain=global_config_map['idex_contract_blockchain'].value)
             self.assertEqual("https://api-bsc.idex.io", IdexAPIOrderBookDataSource.get_idex_rest_url())
 
@@ -85,9 +74,9 @@ class IdexAPIOrderBookDataSourceUnitTest(unittest.TestCase):
     # Uses PropertyMock to mock the API URL. Test confirms ability to fetch all trading pairs
     # on both exchanges (ETH, BSC).
     def test_fetch_trading_pairs(self):
-        with patch(self.REST_URL, new_callable=PropertyMock) as mocked_API_URL:
+        with patch(self.REST_URL, new_callable=PropertyMock) as mocked_api_url:
             # ETH URL
-            mocked_API_URL.return_value = "https://api-eth.idex.io"
+            mocked_api_url.return_value = "https://api-eth.idex.io"
             trading_pairs: List[str] = self.run_async(
                 self.eth_order_book_data_source.fetch_trading_pairs())
             self.assertIn("UNI-ETH", trading_pairs)
@@ -95,7 +84,7 @@ class IdexAPIOrderBookDataSourceUnitTest(unittest.TestCase):
             # possible to use map to iterate through trading pairs list. However, commented out for readability.
             # map(lambda sample_pair : self.assertIn(sample_pair, trading_pairs), self.eth_sample_pairs)
             # BSC URL
-            mocked_API_URL.return_value = "https://api-bsc.idex.io"
+            mocked_api_url.return_value = "https://api-bsc.idex.io"
             trading_pairs: List[str] = self.run_async(
                 self.bsc_order_book_data_source.fetch_trading_pairs())
             self.assertIn("EOS-USDT", trading_pairs)
@@ -112,16 +101,16 @@ class IdexAPIOrderBookDataSourceUnitTest(unittest.TestCase):
 
     @patch(REST_URL, new_callable=PropertyMock)
     @patch(GET_MOCK, new_callable=AsyncMock)
-    def test_get_last_traded_prices(self, mocked_get, mocked_API_URL):
+    def test_get_last_traded_prices(self, mocked_get, mocked_api_url):
         # ETH URL
-        mocked_API_URL.return_value = "https://api-eth.idex.io"
+        mocked_api_url.return_value = "https://api-eth.idex.io"
         mocked_get.return_value.json.return_value = FixtureIdex.TRADING_PAIR_TRADES
         last_traded_prices: List[str] = self.run_async(
             self.eth_order_book_data_source.get_last_traded_prices(self.eth_sample_pairs))
         self.assertEqual({"UNI-ETH": 0.01780000,
                          "LBA-ETH": 0.01780000}, last_traded_prices)
         # BSC URL
-        mocked_API_URL.return_value = "https://api-bsc.idex.io"
+        mocked_api_url.return_value = "https://api-bsc.idex.io"
         mocked_get.return_value.json.return_value = FixtureIdex.TRADING_PAIR_TRADES
         last_traded_prices: List[str] = self.run_async(
             self.bsc_order_book_data_source.get_last_traded_prices(self.bsc_sample_pairs))
@@ -130,9 +119,9 @@ class IdexAPIOrderBookDataSourceUnitTest(unittest.TestCase):
 
     @patch(REST_URL, new_callable=PropertyMock)
     @patch(GET_MOCK, new_callable=AsyncMock)
-    def test_get_mid_price(self, mocked_get, mocked_API_URL):
+    def test_get_mid_price(self, mocked_get, mocked_api_url):
         # ETH URL
-        mocked_API_URL.return_value = "https://api-eth.idex.io"
+        mocked_api_url.return_value = "https://api-eth.idex.io"
         mocked_get.return_value.json.return_value = FixtureIdex.TRADING_PAIR_TICKER
         for t_pair in self.eth_sample_pairs:
             t_pair_mid_price: List[str] = self.run_async(
@@ -140,45 +129,37 @@ class IdexAPIOrderBookDataSourceUnitTest(unittest.TestCase):
             self.assertEqual(Decimal("0.016175005"), t_pair_mid_price)
             self.assertIsInstance(t_pair_mid_price, Decimal)
 
-    # async def get_snapshot(self, trading_pair):
-    #     async with aiohttp.ClientSession() as client:
-    #         try:
-    #             snapshot = await self.eth_order_book_data_source.get_snapshot(client, trading_pair)
-    #             return snapshot
-    #         except Exception:
-    #             return None
 
-    # @unittest.skip("failing aiohttp response context manager mocks")
-    # @patch(REST_URL, new_callable=PropertyMock)
-    # @patch(GET_MOCK, new_callable=AsyncMock)
+class IdexAPIOrderBookDataSourceAsyncTest(TestCaseAsync):
+
+    eth_sample_pairs: List[str] = [
+        "UNI-ETH",
+        "LBA-ETH"
+    ]
+
+    bsc_sample_pairs: List[str] = [
+        "EOS-USDT",
+        "BTCB-BNB"
+    ]
+
+    REST_URL: str = 'hummingbot.connector.exchange.idex.idex_api_order_book_data_source.' \
+                    'IdexAPIOrderBookDataSource._IDEX_REST_URL'
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        # event loop setup not required in TestCaseAsync - call self.loop
+        cls.eth_order_book_data_source: IdexAPIOrderBookDataSource = IdexAPIOrderBookDataSource(cls.eth_sample_pairs)
+        cls.bsc_order_book_data_source: IdexAPIOrderBookDataSource = IdexAPIOrderBookDataSource(cls.bsc_sample_pairs)
+
     @patch(REST_URL, new_callable=PropertyMock)
-    @patch('aiohttp.ClientResponse.json')
-    def test_get_snapshot(self, mocked_get, mocked_api_url):
-
-        # mocked_get.return_value.json.return_value = FixtureIdex.ORDER_BOOK_LEVEL2
-        # mocked_get.return_value.status = 200
-
-        # Mock aiohttp response
-        f = asyncio.Future()
-        f.set_result(FixtureIdex.ORDER_BOOK_LEVEL2)
-        mocked_get.return_value = f
-
+    @patch('aiohttp.ClientSession.get')
+    async def test_get_snapshot(self, mocked_get, mocked_api_url):
+        client = aiohttp.ClientSession()
         mocked_api_url.return_value = "https://api-eth.idex.io"
-
-        # todo alf: attempted to fix error: AttributeError: __aexit__
-        #  but it is tricky to mock aiohttp responses when used as context managers.
-        #  py.test seems to have more support for this. See:
-        #    1. https://gist.github.com/holgi/00d8fa4affacdc80f896dd97c064b6a4
-        #    2. https://pfertyk.me/2017/06/testing-asynchronous-context-managers-in-python/
-
-        # todo alf: other solutions attempted
-        # mocked_get.return_value.__aenter__.return_value.text = AsyncMock(side_effect=["custom text"])
-        # mocked_get.return_value.__aexit__.return_value = AsyncMock(side_effect=lambda *args: True)
-        # mocked_get.return_value = MockGetResponse(FixtureIdex.ORDER_BOOK_LEVEL2, 200)
-        # snapshot = self.run_async(self.get_snapshot("UNI-ETH"))
-
-        snapshot = self.ev_loop.run_until_complete(
-            self.eth_order_book_data_source.get_snapshot(client=aiohttp.ClientSession(), trading_pair="UNI-ETH")
-        )
-
+        # Mock async context manager return values by inputting return values for call to __aenter__.
+        # Use CoroutineMock to mock awaitable json coroutine.
+        mocked_get.return_value.__aenter__.return_value.json = CoroutineMock(return_value=FixtureIdex.ORDER_BOOK_LEVEL2)
+        mocked_get.return_value.__aenter__.return_value.status = 200
+        snapshot = await self.eth_order_book_data_source.get_snapshot(client, trading_pair="UNI-ETH")
         self.assertEqual(FixtureIdex.ORDER_BOOK_LEVEL2, snapshot)
+        await client.close()
