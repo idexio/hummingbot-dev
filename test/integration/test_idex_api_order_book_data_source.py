@@ -12,6 +12,7 @@ from test.integration.assets.mock_data.fixture_idex import FixtureIdex
 from hummingbot.connector.exchange.idex.idex_api_order_book_data_source import IdexAPIOrderBookDataSource
 from hummingbot.core.data_type.order_book import OrderBook
 
+
 class IdexAPIOrderBookDataSourceUnitTest(unittest.TestCase):
 
     eth_sample_pairs: List[str] = [
