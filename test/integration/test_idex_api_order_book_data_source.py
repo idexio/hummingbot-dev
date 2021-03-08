@@ -7,9 +7,10 @@ from unittest.mock import patch, PropertyMock, AsyncMock
 
 from decimal import Decimal
 
+from hummingbot.core.data_type.order_book_tracker_entry import OrderBookTrackerEntry
 from test.integration.assets.mock_data.fixture_idex import FixtureIdex
 from hummingbot.connector.exchange.idex.idex_api_order_book_data_source import IdexAPIOrderBookDataSource
-
+from hummingbot.core.data_type.order_book import OrderBook
 
 class IdexAPIOrderBookDataSourceUnitTest(unittest.TestCase):
 
@@ -28,6 +29,9 @@ class IdexAPIOrderBookDataSourceUnitTest(unittest.TestCase):
     WS_FEED: str = 'hummingbot.connector.exchange.idex.idex_api_order_book_data_source.' \
                    'IdexAPIOrderBookDataSource._IDEX_WS_FEED'
     GET_MOCK: str = 'aiohttp.ClientSession.get'
+
+    PATCH_BASE_PATH = \
+        'hummingbot.connector.exchange.idex.idex_api_order_book_data_source.IdexAPIOrderBookDataSource.{method}'
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -161,3 +165,54 @@ class IdexAPIOrderBookDataSourceUnitTest(unittest.TestCase):
         snapshot = snapshot.result()
         self.assertEqual(FixtureIdex.ORDER_BOOK_LEVEL2, snapshot)
 
+    @patch(REST_URL, new_callable=PropertyMock)
+    @patch(PATCH_BASE_PATH.format(method='get_snapshot'))
+    def test_get_new_order_book(self, mock_get_snapshot, mocked_api_url):
+
+        # Mock Future() object return value as the request response
+        # For this particular test, the return value from get_snapshot is not relevant, therefore
+        # setting it with a random snapshot from fixture
+        f = asyncio.Future()
+        f.set_result(FixtureIdex.SNAPSHOT_2)
+        mock_get_snapshot.return_value = f.result()
+
+        mocked_api_url.return_value = "https://api-eth.idex.io"
+        orderbook = self.ev_loop.run_until_complete(self.eth_order_book_data_source.get_new_order_book("UNI-ETH"))
+
+        print(orderbook.snapshot[0])
+
+        # Validate the returned value is OrderBook
+        self.assertIsInstance(orderbook, OrderBook)
+
+        # Ensure the number of bids / asks provided in the snapshot are equal to the respective number of orderbook rows
+        self.assertEqual(len(orderbook.snapshot[0].index), len(FixtureIdex.SNAPSHOT_2["bids"]))
+
+    @patch(REST_URL, new_callable=PropertyMock)
+    @patch(PATCH_BASE_PATH.format(method='get_snapshot'))
+    def test_get_tracking_pairs(self, mock_get_snapshot, mocked_api_url):
+
+        mocked_api_url.return_value = "https://api-eth.idex.io"
+
+        # Mock Future() object return value as the request response
+        # For this particular test, the return value from get_snapshot is not relevant, therefore
+        # setting it with a random snapshot from fixture
+        f = asyncio.Future()
+        f.set_result(FixtureIdex.SNAPSHOT_2)
+        mock_get_snapshot.return_value = f.result()
+
+        tracking_pairs = self.ev_loop.run_until_complete(self.eth_order_book_data_source.get_tracking_pairs())
+
+        # Validate the number of tracking pairs is equal to the number of trading pairs received
+        self.assertEqual(len(self.eth_sample_pairs), len(tracking_pairs))
+
+        # Make sure the entry key in tracking pairs matches with what's in the trading pairs
+        for trading_pair, tracking_pair_obj in zip(self.eth_sample_pairs, list(tracking_pairs.keys())):
+            self.assertEqual(trading_pair, tracking_pair_obj)
+
+        # Validate the data type for each tracking pair value is OrderBookTrackerEntry
+        for order_book_tracker_entry in tracking_pairs.values():
+            self.assertIsInstance(order_book_tracker_entry, OrderBookTrackerEntry)
+
+        # Validate the order book tracker entry trading_pairs are valid
+        for trading_pair, order_book_tracker_entry in zip(self.eth_sample_pairs, tracking_pairs.values()):
+            self.assertEqual(order_book_tracker_entry.trading_pair, trading_pair)
