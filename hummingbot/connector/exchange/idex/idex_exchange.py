@@ -655,10 +655,6 @@ class IdexExchange(ExchangeBase):
 
         # for wallet in wallets:
         accounts = await self._client.user.balances(wallet=wallet_address)
-        print(f"balances... {accounts}")
-        self.logger().info(f"wallet addr: {wallet_address}")
-        # self.logger().info(wallet_address)
-
         if len(accounts) == 0:
             raise Exception("Wallet does not have any token balances. Please deposit some tokens.")
         for account in accounts:
