@@ -52,7 +52,7 @@ cdef class IdexOrderBook(OrderBook):
     @classmethod
     def diff_message_from_exchange(cls,
                                    msg: Dict[str, Any],
-                                   timestamp: Optional[float] = None,
+                                   timestamp: float,
                                    metadata: Optional[Dict] = None) -> OrderBookMessage:
         """
         *required
@@ -61,10 +61,12 @@ cdef class IdexOrderBook(OrderBook):
         :param timestamp: timestamp attached to incoming data
         :return: IdexOrderBookMessage
         """
+
         if metadata:
             msg.update(metadata)
-        if "time" in msg:  # TODO ALF: check 'time' present
-            msg_time = pd.Timestamp(msg["time"]).timestamp()
+        if msg["data"]["t"] is None:
+            # time is present in msg as msg["data"]["t"] in POSIX format. :param is timestamp above
+            msg_time = pd.Timestamp.timestamp()
         return IdexOrderBookMessage(
             message_type=OrderBookMessageType.DIFF,
             content=msg,
@@ -116,7 +118,7 @@ cdef class IdexOrderBook(OrderBook):
     @classmethod
     def trade_message_from_exchange(cls,
                                     msg: Dict[str, Any],
-                                    timestamp: Optional[float] = None,
+                                    timestamp: float,
                                     metadata: Optional[Dict] = None):
         """
         Convert a trade data into standard OrderBookMessage format
@@ -125,11 +127,11 @@ cdef class IdexOrderBook(OrderBook):
         :param metadata: metadata to add to the websocket message
         :return: IdexOrderBookMessage
         """
-        # TODO ALF: check correctness
+        # msg keys taken from ws trade response
         if metadata:
             msg.update(metadata)
         msg.update({
-            "exchange_order_id": msg.get("d"),
+            "exchange_order_id": msg.get("i"),
             "trade_type": msg.get("s"),
             "price": msg.get("p"),
             "amount": msg.get("q"),

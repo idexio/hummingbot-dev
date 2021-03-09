@@ -23,8 +23,9 @@ class IdexOrderBookMessage(OrderBookMessage):
     ):
         if timestamp is None:
             if message_type is OrderBookMessageType.SNAPSHOT:
-                raise ValueError("timestamp must not be None when initializing snapshot messages.")
-            timestamp = pd.Timestamp(content["time"], tz="UTC").timestamp()
+                raise ValueError("timestamp must not be None when initializing snapshot messages.")\
+            # TODO ALF: confirm the index "time" is appropriate for non-snapshot orderbook messages.
+            timestamp = pd.Timestamp(content["data"]["t"], tz="UTC").timestamp()
         return super(IdexOrderBookMessage, cls).__new__(
             cls, message_type, content, timestamp=timestamp, *args, **kwargs
         )
