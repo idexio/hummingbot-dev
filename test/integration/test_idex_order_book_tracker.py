@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import math
 from os.path import join, realpath
-import sys; sys.path.insert(0, realpath(join(__file__, "../../../")))
+import sys
 from hummingbot.core.event.event_logger import EventLogger
 from hummingbot.core.event.events import OrderBookEvent, OrderBookTradeEvent, TradeType
 from hummingbot.connector.exchange.idex.idex_order_book_tracker import IdexOrderBookTracker
@@ -20,6 +20,7 @@ from hummingbot.core.utils.async_utils import (
     safe_ensure_future,
     safe_gather,
 )
+sys.path.insert(0, realpath(join(__file__, "../../../")))
 
 
 class IdexOrderBookTrackerUnitTest(unittest.TestCase):
@@ -82,7 +83,7 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
         for ob_trade_event in self.event_logger.event_log:
             print(f"ob_trade_event: {ob_trade_event}")
             self.assertTrue(type(ob_trade_event) == OrderBookTradeEvent)
-            self.assertTrue(ob_trade_event.trading_pair in self.trading_pairs)
+            self.assertTrue(ob_trade_event.trading_pair in self.eth_sample_pairs)
             self.assertTrue(type(ob_trade_event.timestamp) == float)
             self.assertTrue(type(ob_trade_event.amount) == float)
             self.assertTrue(type(ob_trade_event.price) == float)
