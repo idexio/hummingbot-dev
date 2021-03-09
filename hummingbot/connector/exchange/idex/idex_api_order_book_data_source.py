@@ -275,7 +275,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                         elif msg_type == "error":
                             raise ValueError(f"Idex Websocket received error message - {msg['data']['message']}")
                         elif msg_type == "trades":
-                            trade_timestamp: float = pd.Timestamp(msg["data"]["t"], unit='ms', tz='utc').timestamp()
+                            trade_timestamp: float = pd.Timestamp(msg["data"]["t"], unit='ms').timestamp()
                             trade_msg: OrderBookMessage = IdexOrderBook.trade_message_from_exchange(msg, trade_timestamp)
                             output.put_nowait(trade_msg)
                         else:
@@ -330,7 +330,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                             raise ValueError(f"Idex WebSocket message received error message - "
                                              f"{msg['data']['message']}")
                         elif msg_type == "l2orderbook":
-                            diff_timestamp: float = pd.Timestamp(msg["data"]["t"], unit='ms', tz='utc').timestamp()
+                            diff_timestamp: float = pd.Timestamp(msg["data"]["t"], unit='ms').timestamp()
                             order_book_message: OrderBookMessage = \
                                 IdexOrderBook.diff_message_from_exchange(msg, diff_timestamp)
                             output.put_nowait(order_book_message)

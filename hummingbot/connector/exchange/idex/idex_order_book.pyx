@@ -66,7 +66,7 @@ cdef class IdexOrderBook(OrderBook):
             msg.update(metadata)
         if msg["data"]["t"] is None:
             # time is present in msg as msg["data"]["t"] in POSIX format. :param is timestamp above
-            msg_time = pd.Timestamp.now('utc')
+            msg_time = pd.Timestamp.timestamp()
         return IdexOrderBookMessage(
             message_type=OrderBookMessageType.DIFF,
             content=msg,
