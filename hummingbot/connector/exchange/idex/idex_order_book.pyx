@@ -52,7 +52,7 @@ cdef class IdexOrderBook(OrderBook):
     @classmethod
     def diff_message_from_exchange(cls,
                                    msg: Dict[str, Any],
-                                   timestamp: float,
+                                   timestamp: Optional[float] = None,
                                    metadata: Optional[Dict] = None) -> OrderBookMessage:
         """
         *required
@@ -64,9 +64,9 @@ cdef class IdexOrderBook(OrderBook):
 
         if metadata:
             msg.update(metadata)
-        if msg["data"]["t"] is None:
-            # time is present in msg as msg["data"]["t"] in POSIX format. :param is timestamp above
-            msg_time = pd.Timestamp.timestamp()
+        if msg.get("data").get("t") is None:
+            # time is present in msg as msg["data"]["t"] in POSIX format. If not, call time.time() for UTC/s timestamp
+            msg_time = time.time()
         return IdexOrderBookMessage(
             message_type=OrderBookMessageType.DIFF,
             content=msg,
@@ -118,7 +118,7 @@ cdef class IdexOrderBook(OrderBook):
     @classmethod
     def trade_message_from_exchange(cls,
                                     msg: Dict[str, Any],
-                                    timestamp: float,
+                                    timestamp: Optional[float] = None,
                                     metadata: Optional[Dict] = None):
         """
         Convert a trade data into standard OrderBookMessage format
