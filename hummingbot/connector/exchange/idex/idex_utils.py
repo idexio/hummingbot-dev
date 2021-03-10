@@ -25,7 +25,6 @@ def validate_idex_contract_blockchain(value: str) -> Optional[str]:
     if value not in IDEX_BLOCKCHAINS:
         return f'Value {value} must be one of: {IDEX_BLOCKCHAINS}'
 
-
 KEYS = {
     "idex_api_key":
         ConfigVar(key="idex_api_key",
@@ -49,7 +48,7 @@ KEYS = {
         ConfigVar(key="idex_contract_blockchain",
                   prompt=f"Enter blockchain to interact with IDEX contract ({'/'.join(IDEX_BLOCKCHAINS)})>>> ",
                   required_if=using_exchange(EXCHANGE_NAME),
-                  default='ETH',
+                  default='eth',
                   validator=validate_idex_contract_blockchain,
                   is_secure=True,
                   is_connect_key=False),
