@@ -16,7 +16,7 @@ EXCHANGE_NAME = "idex"
 
 IDEX_BLOCKCHAINS = ('ETH', 'BSC')
 
-# WS Feed adjusted to sandbox url
+# API Feed adjusted to sandbox url
 IDEX_REST_URL_FMT = "https://api-sandbox-{blockchain}.idex.io/"
 # WS Feed adjusted to sandbox url
 IDEX_WS_FEED_FMT = "wss://websocket-sandbox-{blockchain}.idex.io/v1"
