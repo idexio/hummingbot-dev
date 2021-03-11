@@ -85,8 +85,8 @@ cdef class IdexActiveOrderTracker:
             double timestamp = message.timestamp
             double amount = 0
 
-        bid_entries = content["bids"]
-        ask_entries = content["asks"]
+        bid_entries = content["data"]["b"]
+        ask_entries = content["data"]["a"]
 
         bids = s_empty_diff
         asks = s_empty_diff

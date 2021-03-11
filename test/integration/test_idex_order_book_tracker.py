@@ -2,6 +2,8 @@
 import math
 from os.path import join, realpath
 import sys
+from unittest.mock import PropertyMock, patch
+
 from hummingbot.core.event.event_logger import EventLogger
 from hummingbot.core.event.events import OrderBookEvent, OrderBookTradeEvent, TradeType
 from hummingbot.connector.exchange.idex.idex_order_book_tracker import IdexOrderBookTracker
@@ -22,6 +24,12 @@ from hummingbot.core.utils.async_utils import (
 )
 sys.path.insert(0, realpath(join(__file__, "../../../")))
 
+WS_FEED: str = 'hummingbot.connector.exchange.idex.idex_api_order_book_data_source.' \
+                   'IdexAPIOrderBookDataSource._IDEX_WS_FEED'
+
+REST_URL: str = 'hummingbot.connector.exchange.idex.idex_api_order_book_data_source.' \
+                    'IdexAPIOrderBookDataSource._IDEX_REST_URL'
+
 
 class IdexOrderBookTrackerUnitTest(unittest.TestCase):
 
@@ -31,20 +39,15 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
     ]
 
     eth_sample_pairs: List[str] = [
-        "UNI-ETH",
-        "LBA-ETH"
-    ]
-
-    bsc_sample_pairs: List[str] = [
-        "EOS-USDT",
-        "BTCB-BNB"
+        "DIL-ETH",
+        "CUR-ETH",
+        "PIP-ETH"
     ]
 
     @classmethod
     def setUpClass(cls):
         cls.ev_loop: asyncio.BaseEventLoop = asyncio.get_event_loop()
-        cls.eth_order_book_tracker: IdexOrderBookTracker = IdexOrderBookTracker(trading_pairs=cls.eth_sample_pairs)
-        cls.bsc_order_book_tracker: IdexOrderBookTracker = IdexOrderBookTracker(trading_pairs=cls.bsc_sample_pairs)
+        cls.order_book_tracker: IdexOrderBookTracker = IdexOrderBookTracker(trading_pairs=cls.eth_sample_pairs)
 
         cls.order_book_tracker_task: asyncio.Task = safe_ensure_future(cls.order_book_tracker.start())
         cls.ev_loop.run_until_complete(cls.wait_til_tracker_ready())
@@ -96,30 +99,38 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
         # Wait 5 seconds to process some diffs.
         self.ev_loop.run_until_complete(asyncio.sleep(10.0))
         order_books: Dict[str, OrderBook] = self.order_book_tracker.order_books
-        uni_eth_book: OrderBook = order_books["UNI-ETH"]
-        lba_eth_book: OrderBook = order_books["LBA-ETH"]
-        # print(uni_eth_book.snapshot)
-        # print("lba_eth")
-        # print(lba_eth_book.snapshot)
-        self.assertGreaterEqual(uni_eth_book.get_price_for_volume(True, 10).result_price,
-                                uni_eth_book.get_price(True))
-        self.assertLessEqual(uni_eth_book.get_price_for_volume(False, 10).result_price,
-                             uni_eth_book.get_price(False))
-        self.assertGreaterEqual(lba_eth_book.get_price_for_volume(True, 10000).result_price,
-                                lba_eth_book.get_price(True))
-        self.assertLessEqual(lba_eth_book.get_price_for_volume(False, 10000).result_price,
-                             lba_eth_book.get_price(False))
+        dil_eth_book: OrderBook = order_books["DIL-ETH"]
+        pip_eth_book: OrderBook = order_books["PIP-ETH"]
+        cur_eth_book: OrderBook = order_books["CUR-ETH"]
+        # print(dil_eth_book.snapshot)
+        # print(pip_eth_book.snapshot)
+        # print(cur_eth_book.snapshot)
+        self.assertGreaterEqual(dil_eth_book.get_price_for_volume(True, 1).result_price,
+                                dil_eth_book.get_price(True))
+        self.assertLessEqual(dil_eth_book.get_price_for_volume(False, 1).result_price,
+                             dil_eth_book.get_price(False))
+        self.assertGreaterEqual(pip_eth_book.get_price_for_volume(True, 3).result_price,
+                                pip_eth_book.get_price(True))
+        self.assertLessEqual(pip_eth_book.get_price_for_volume(False, 3).result_price,
+                             pip_eth_book.get_price(False))
+        self.assertGreaterEqual(cur_eth_book.get_price_for_volume(True, 10).result_price,
+                                cur_eth_book.get_price(True))
+        self.assertLessEqual(cur_eth_book.get_price_for_volume(False, 10).result_price,
+                             cur_eth_book.get_price(False))
         for order_book in self.order_book_tracker.order_books.values():
             print(order_book.last_trade_price)
             self.assertFalse(math.isnan(order_book.last_trade_price))
 
     def test_api_get_last_traded_prices(self):
-        idex_ob_data_source = IdexAPIOrderBookDataSource(["UNI-ETH", "LBA-ETH"])
-        prices = self.ev_loop.run_until_complete(idex_ob_data_source.get_last_traded_prices(["UNI-ETH", "LBA-ETH"]))
+        idex_ob_data_source = IdexAPIOrderBookDataSource(["DIL-ETH", "PIP-ETH", "CUR-ETH"])
+        prices = self.ev_loop.run_until_complete(idex_ob_data_source.get_last_traded_prices(["DIL-ETH",
+                                                                                             "PIP-ETH",
+                                                                                             "CUR-ETH"]))
         for key, value in prices.items():
             print(f"{key} last_trade_price: {value}")
-        self.assertGreater(prices["UNI-ETH"], 1000)
-        self.assertLess(prices["LBA-ETH"], 1)
+        self.assertGreater(prices["DIL-ETH"], 0.07)
+        self.assertLess(prices["PIP-ETH"], 0.06)
+        self.assertLess(prices["CUR-ETH"], 0.011)
 
 
 def main():

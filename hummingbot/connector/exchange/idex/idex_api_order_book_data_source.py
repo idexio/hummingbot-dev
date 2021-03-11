@@ -289,6 +289,9 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                             trade_timestamp: float = pd.Timestamp(msg["data"]["t"], unit='ms').timestamp()
                             trade_msg: OrderBookMessage = IdexOrderBook.trade_message_from_exchange(msg, trade_timestamp)
                             output.put_nowait(trade_msg)
+                        elif msg_type == "subscriptions":
+                            self.logger().info("subscription to l2orderbook received")
+                            continue
                         else:
                             raise ValueError(f"Unrecognized Idex WebSocket message received - {msg}")
             except asyncio.CancelledError:
@@ -372,7 +375,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                             snapshot_msg: OrderBookMessage = IdexOrderBook.snapshot_message_from_exchange(
                                 snapshot,
                                 snapshot_timestamp,
-                                metadata={"product_id": trading_pair}
+                                metadata={"trading_pair": trading_pair}
                             )
                             output.put_nowait(snapshot_msg)
                             self.logger().debug(f"Saved orderbook snapshot for {trading_pair}")
