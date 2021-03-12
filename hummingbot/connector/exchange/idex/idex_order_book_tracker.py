@@ -84,17 +84,6 @@ class IdexOrderBookTracker(OrderBookTracker):
                     continue
                 await message_queue.put(ob_message)
                 messages_accepted += 1
-                if ob_message.content["type"] == "match":  # put match messages to trade queue
-                    trade_type = float(TradeType.SELL.value) if ob_message.content["side"].upper() == "SELL" \
-                        else float(TradeType.BUY.value)
-                    self._order_book_trade_stream.put_nowait(OrderBookMessage(OrderBookMessageType.TRADE, {
-                        "trading_pair": ob_message.trading_pair,
-                        "trade_type": trade_type,
-                        "trade_id": ob_message.update_id,
-                        "update_id": ob_message.timestamp,
-                        "price": ob_message.content["price"],
-                        "amount": ob_message.content["size"]
-                    }, timestamp=ob_message.timestamp))
 
                 # Log some statistics.
                 now: float = time.time()
@@ -134,7 +123,7 @@ class IdexOrderBookTracker(OrderBookTracker):
 
         while True:
             try:
-                message: IdexOrderBookMessage = None
+                message: IdexOrderBookMessage
                 saved_messages: Deque[IdexOrderBookMessage] = self._saved_message_queues[trading_pair]
                 # Process saved messages first if there are any
                 if len(saved_messages) > 0:

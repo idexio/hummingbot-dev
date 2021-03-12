@@ -35,7 +35,7 @@ class IdexOrderBookMessage(OrderBookMessage):
             # sequence numbers can be found in self.content["sequence"] for SNAPSHOT orderbook messages
             return int(self.content["sequence"])
         elif self.type is OrderBookMessageType.DIFF:
-            # sequence numbers can be found in self.content["sequence"] for DIFF orderbook messages
+            # sequence numbers can be found in self.content["data"]["u"] for DIFF orderbook messages
             return int(self.content["data"]["u"])
         else:
             return -1
