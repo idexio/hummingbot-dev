@@ -2,7 +2,6 @@
 import math
 from os.path import join, realpath
 import sys
-from unittest.mock import PropertyMock, patch
 
 from hummingbot.core.event.event_logger import EventLogger
 from hummingbot.core.event.events import OrderBookEvent, OrderBookTradeEvent, TradeType
@@ -23,12 +22,6 @@ from hummingbot.core.utils.async_utils import (
     safe_gather,
 )
 sys.path.insert(0, realpath(join(__file__, "../../../")))
-
-WS_FEED: str = 'hummingbot.connector.exchange.idex.idex_api_order_book_data_source.' \
-                   'IdexAPIOrderBookDataSource._IDEX_WS_FEED'
-
-REST_URL: str = 'hummingbot.connector.exchange.idex.idex_api_order_book_data_source.' \
-                    'IdexAPIOrderBookDataSource._IDEX_REST_URL'
 
 
 class IdexOrderBookTrackerUnitTest(unittest.TestCase):
