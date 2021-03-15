@@ -57,17 +57,19 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
     @classmethod
     def get_idex_rest_url(cls) -> str:
         if cls._IDEX_REST_URL is None:
-            cls._IDEX_REST_URL = IDEX_REST_URL_FMT.format\
-                (blockchain=global_config_map["idex_contract_blockchain"].value or
-                    global_config_map["idex_contract_blockchain"].default)
+            cls._IDEX_REST_URL = IDEX_REST_URL_FMT.format(
+                blockchain=global_config_map["idex_contract_blockchain"].value or global_config_map[
+                    "idex_contract_blockchain"].default
+            )
         return cls._IDEX_REST_URL
 
     @classmethod
     def get_idex_ws_feed(cls) -> str:
         if cls._IDEX_WS_FEED is None:
-            cls._IDEX_WS_FEED = IDEX_WS_FEED_FMT.format\
-                (blockchain=global_config_map["idex_contract_blockchain"].value or
-                    global_config_map["idex_contract_blockchain"].default)
+            cls._IDEX_WS_FEED = IDEX_WS_FEED_FMT.format(
+                blockchain=global_config_map["idex_contract_blockchain"].value or global_config_map[
+                    "idex_contract_blockchain"].default
+            )
         return cls._IDEX_WS_FEED
 
     # Found last trading price in Idex API. Utilized safe_gather to complete all tasks and append last trade prices
