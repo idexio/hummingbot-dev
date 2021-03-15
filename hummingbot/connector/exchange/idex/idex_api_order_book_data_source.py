@@ -32,13 +32,11 @@ from hummingbot.connector.exchange.idex.idex_order_book_tracker_entry import Ide
 from hummingbot.connector.exchange.idex.idex_order_book import IdexOrderBook
 from hummingbot.connector.exchange.idex.idex_utils import IDEX_REST_URL_FMT, IDEX_WS_FEED_FMT
 
-
 MAX_RETRIES = 20
 NaN = float("nan")
 
 
 class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
-
     MESSAGE_TIMEOUT = 30.0
     PING_TIMEOUT = 10.0
 
@@ -60,16 +58,16 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
     def get_idex_rest_url(cls) -> str:
         if cls._IDEX_REST_URL is None:
             cls._IDEX_REST_URL = IDEX_REST_URL_FMT.format\
-                ( blockchain=global_config_map["idex_contract_blockchain"].value
-                             or global_config_map["idex_contract_blockchain"].default )
+                (blockchain=global_config_map["idex_contract_blockchain"].value or
+                    global_config_map["idex_contract_blockchain"].default)
         return cls._IDEX_REST_URL
 
     @classmethod
     def get_idex_ws_feed(cls) -> str:
         if cls._IDEX_WS_FEED is None:
             cls._IDEX_WS_FEED = IDEX_WS_FEED_FMT.format\
-                ( blockchain=global_config_map["idex_contract_blockchain"].value
-                             or global_config_map["idex_contract_blockchain"].default )
+                (blockchain=global_config_map["idex_contract_blockchain"].value or
+                    global_config_map["idex_contract_blockchain"].default)
         return cls._IDEX_WS_FEED
 
     # Found last trading price in Idex API. Utilized safe_gather to complete all tasks and append last trade prices
@@ -192,7 +190,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                         active_order_tracker
                     )
                     self.logger().info(f"Initialized order book for {trading_pair}."
-                                       f"{index+1}/{number_of_pairs} completed.")
+                                       f"{index + 1}/{number_of_pairs} completed.")
                     await asyncio.sleep(0.6)
                 except IOError:
                     self.logger().network(
@@ -277,6 +275,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                             trade_timestamp: float = pd.Timestamp(msg["data"]["t"], unit="ms").timestamp()
                             trade_msg: OrderBookMessage = IdexOrderBook.trade_message_from_exchange(msg,
                                                                                                     trade_timestamp)
+
                             output.put_nowait(trade_msg)
                         elif msg_type == "subscriptions":
                             self.logger().info("subscription to trade received")

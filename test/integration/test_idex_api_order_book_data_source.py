@@ -291,7 +291,11 @@ class IdexAPIOrderBookDataSourceUnitTest(unittest.TestCase):
         self.assertEqual(first_item.content['asks'], FixtureIdex.SNAPSHOT_1['asks'])
 
         # Validate the rest of the content
+<<<<<<< HEAD
         self.assertEqual(first_item.content['trading_pair'], self.eth_sample_pairs[0])
+=======
+        self.assertEqual(first_item.content['product_id'], self.eth_sample_pairs[0])
+>>>>>>> f054ac988bf306ee14114c01b5478b9182f9749d
         self.assertEqual(first_item.content['sequence'], FixtureIdex.SNAPSHOT_1['sequence'])
 
     @patch(WS_FEED, new_callable=PropertyMock)
@@ -342,10 +346,20 @@ class IdexAPIOrderBookDataSourceUnitTest(unittest.TestCase):
             # Validate the actual content injected is dict type
             self.assertIsInstance(event.content, dict)
 
+<<<<<<< HEAD
     @patch(PATCH_BASE_PATH.format(method='_inner_messages'))
     def test_listen_for_trades(self, mock_inner_messages):
         timeout = 2
 
+=======
+    @patch(WS_FEED, new_callable=PropertyMock)
+    @patch(PATCH_BASE_PATH.format(method='_inner_messages'))
+    def test_listen_for_trades(self, mock_inner_messages, mock_ws_feed):
+        timeout = 2
+
+        mock_ws_feed.return_value = "wss://websocket-eth.idex.io/v1"
+
+>>>>>>> f054ac988bf306ee14114c01b5478b9182f9749d
         q = asyncio.Queue()
 
         #  Socket events receiving in the order from top to bottom
