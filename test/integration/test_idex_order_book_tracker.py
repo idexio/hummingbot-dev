@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import datetime
 import math
 from os.path import join, realpath
 import sys
@@ -84,7 +85,7 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
             self.assertTrue(type(ob_trade_event.amount) == float)
             self.assertTrue(type(ob_trade_event.price) == float)
             self.assertTrue(type(ob_trade_event.type) == TradeType)
-            self.assertTrue(math.ceil(math.log10(ob_trade_event.timestamp)) == 10)
+            self.assertTrue(datetime.datetime.fromtimestamp(ob_trade_event.timestamp).year >= 2021)
             self.assertTrue(ob_trade_event.amount > 0)
             self.assertTrue(ob_trade_event.price > 0)
 

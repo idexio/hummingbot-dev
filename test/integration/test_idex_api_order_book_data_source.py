@@ -61,13 +61,13 @@ class IdexAPIOrderBookDataSourceUnitTest(unittest.TestCase):
 
     def test_get_idex_rest_url(self):
         # Calls blockchain default ("eth") in global_config[blockchain] if blockchain value is None
-        # Todo ALF: test with user inputs and blockchain value to ensure ETH and BSC blockchain inputs work
-        self.assertEqual("https://api-eth.idex.io", IdexAPIOrderBookDataSource.get_idex_rest_url())
+        # Todo: test with user inputs and blockchain value to ensure ETH and BSC blockchain inputs work
+        self.assertEqual("https://api-sandbox-ETH.idex.io/", IdexAPIOrderBookDataSource.get_idex_rest_url())
 
     def test_get_idex_ws_feed(self):
         # Calls blockchain default ("eth") in global_config[blockchain] if blockchain value is None
-        # Todo ALF: test with user inputs and blockchain value to ensure ETH and BSC blockchain inputs work.
-        self.assertEqual("wss://websocket-eth.idex.io/v1", IdexAPIOrderBookDataSource.get_idex_ws_feed())
+        # Todo: test with user inputs and blockchain value to ensure ETH and BSC blockchain inputs work.
+        self.assertEqual("wss://websocket-sandbox-ETH.idex.io/v1", IdexAPIOrderBookDataSource.get_idex_ws_feed())
 
     # Test returns: Success
     # Uses PropertyMock to mock the API URL. Test confirms ability to fetch all trading pairs
@@ -291,7 +291,7 @@ class IdexAPIOrderBookDataSourceUnitTest(unittest.TestCase):
         self.assertEqual(first_item.content['asks'], FixtureIdex.SNAPSHOT_1['asks'])
 
         # Validate the rest of the content
-        self.assertEqual(first_item.content['product_id'], self.eth_sample_pairs[0])
+        self.assertEqual(first_item.content['trading_pair'], self.eth_sample_pairs[0])
         self.assertEqual(first_item.content['sequence'], FixtureIdex.SNAPSHOT_1['sequence'])
 
     @patch(WS_FEED, new_callable=PropertyMock)

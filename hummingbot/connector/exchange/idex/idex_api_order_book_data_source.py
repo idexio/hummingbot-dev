@@ -56,32 +56,20 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
     def __init__(self, trading_pairs: List[str]):
         super().__init__(trading_pairs)
 
-    # in testing, get_idex_rest_url and get_idex_ws_feed both return None when run.
     @classmethod
     def get_idex_rest_url(cls) -> str:
         if cls._IDEX_REST_URL is None:
-            if global_config_map['idex_contract_blockchain'].value is not None:
-                cls._IDEX_REST_URL = IDEX_REST_URL_FMT.format(
-                    blockchain=global_config_map['idex_contract_blockchain'].value
-                )
-            else:
-                cls._IDEX_REST_URL = IDEX_REST_URL_FMT.format(
-                    blockchain=global_config_map['idex_contract_blockchain'].default
-                )
-
+            cls._IDEX_REST_URL = IDEX_REST_URL_FMT.format\
+                ( blockchain=global_config_map["idex_contract_blockchain"].value
+                             or global_config_map["idex_contract_blockchain"].default )
         return cls._IDEX_REST_URL
 
     @classmethod
     def get_idex_ws_feed(cls) -> str:
         if cls._IDEX_WS_FEED is None:
-            if global_config_map['idex_contract_blockchain'].value is not None:
-                cls._IDEX_WS_FEED = IDEX_WS_FEED_FMT.format(
-                    blockchain=global_config_map['idex_contract_blockchain'].value
-                )
-            else:
-                cls._IDEX_WS_FEED = IDEX_WS_FEED_FMT.format(
-                    blockchain=global_config_map['idex_contract_blockchain'].default
-                )
+            cls._IDEX_WS_FEED = IDEX_WS_FEED_FMT.format\
+                ( blockchain=global_config_map["idex_contract_blockchain"].value
+                             or global_config_map["idex_contract_blockchain"].default )
         return cls._IDEX_WS_FEED
 
     # Found last trading price in Idex API. Utilized safe_gather to complete all tasks and append last trade prices
@@ -286,13 +274,12 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                         elif msg_type == "error":
                             raise ValueError(f"Idex Websocket received error message - {msg['data']['message']}")
                         elif msg_type == "trades":
-                            trade_timestamp: float = pd.Timestamp(msg["data"]["t"], unit='ms').timestamp()
+                            trade_timestamp: float = pd.Timestamp(msg["data"]["t"], unit="ms").timestamp()
                             trade_msg: OrderBookMessage = IdexOrderBook.trade_message_from_exchange(msg,
                                                                                                     trade_timestamp)
                             output.put_nowait(trade_msg)
                         elif msg_type == "subscriptions":
-                            self.logger().info("subscription to l2orderbook received")
-                            continue
+                            self.logger().info("subscription to trade received")
                         else:
                             raise ValueError(f"Unrecognized Idex WebSocket message received - {msg}")
             except asyncio.CancelledError:
@@ -345,13 +332,12 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                             raise ValueError(f"Idex WebSocket message received error message - "
                                              f"{msg['data']['message']}")
                         elif msg_type == "l2orderbook":
-                            diff_timestamp: float = pd.Timestamp(msg["data"]["t"], unit='ms').timestamp()
+                            diff_timestamp: float = pd.Timestamp(msg["data"]["t"], unit="ms").timestamp()
                             order_book_message: OrderBookMessage = \
                                 IdexOrderBook.diff_message_from_exchange(msg, diff_timestamp)
                             output.put_nowait(order_book_message)
                         elif msg_type == "subscriptions":
                             self.logger().info("subscription to l2orderbook received")
-                            continue
                         else:
                             raise ValueError(f"Unrecognized Idex WebSocket message received - {msg}")
             except asyncio.CancelledError:
