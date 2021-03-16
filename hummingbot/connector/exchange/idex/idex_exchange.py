@@ -1,4 +1,5 @@
 import json
+import math
 import time
 import asyncio
 import aiohttp
@@ -173,7 +174,8 @@ class IdexExchange(ExchangeBase):
         return order_id
 
     # def amount_to_precision(self, symbol, amount):
-        # return self.decimal_to_precision(amount, TRUNCATE, self.markets[symbol]['precision']['amount'], self.precisionMode, self.paddingMode)
+        # return self.decimal_to_precision(amount, TRUNCATE, self.markets[symbol]['precision']['amount'],
+    # self.precisionMode, self.paddingMode)
 
     def sell(self, trading_pair: str, amount: Decimal, order_type=OrderType.MARKET, price: Decimal = s_decimal_NaN,
              **kwargs):
@@ -234,13 +236,9 @@ class IdexExchange(ExchangeBase):
                 data = await response.json()
                 return data
 
-    async def get_order(self, client_order_id: str) -> Dict[str, Any]:
+    async def get_order(self, exchange_order_id: str) -> Dict[str, Any]:
         """ Confirms exchange ID of tracked order and requests it through API. Returns json data with order details """
 
-        order = self._in_flight_orders.get(client_order_id)
-        if order is None:
-            return None
-        exchange_order_id = await order.get_exchange_order_id()
         rest_url = get_idex_rest_url()
         url = f"{rest_url}v1/orders/?orderId={exchange_order_id}"
         params = {
@@ -527,147 +525,103 @@ class IdexExchange(ExchangeBase):
         """
         Calls REST API to get status update for each in-flight order.
         """
-        last_tick = self._last_poll_timestamp / self.UPDATE_ORDER_STATUS_MIN_INTERVAL
-        current_tick = self.current_timestamp / self.UPDATE_ORDER_STATUS_MIN_INTERVAL
-
-        tracked_orders = list(self._in_flight_orders.values())
-        results = await self._get_orders()
-        order_dict = dict((result["id"], result) for result in results)
-
-        for tracked_order in tracked_orders:
-            exchange_order_id = await tracked_order.get_exchange_order_id()
-            order_update = order_dict.get(exchange_order_id)
-            client_order_id = tracked_order.client_order_id
-            if order_update is None:
-                try:
-                    # Attempts to identify reason why the order was not provided in response
-                    order = await self.get_order(client_order_id)
-                except IOError as e:
-                    if "order not found" in str(e):
-                        # The order does not exist. So we should not be tracking it.
-                        self.logger().info(
-                            f"The tracked order {client_order_id} does not exist on Coinbase Pro."
-                            f"Order removed from tracking."
-                        )
-                        self.c_stop_tracking_order(client_order_id)
-                        self.c_trigger_event(
-                            self.MARKET_ORDER_CANCELLED_EVENT_TAG,
-                            OrderCancelledEvent(self._current_timestamp, client_order_id)
-                        )
-                except asyncio.CancelledError:
-                    raise
-                except Exception as e:
-                    self.logger().network(
-                        f"Error fetching status update for the order {client_order_id}: ",
-                        exc_info=True,
-                        app_warning_msg=f"Could not fetch updates for the order {client_order_id}. "
-                                        f"Check API key and network connection.{e}"
-                    )
-                continue
-
-            # Calculate and document the new fills found in the order update
-            new_confirmed_amount = Decimal(order_update["executed_quantity"])
-            execute_amount_diff = new_confirmed_amount - tracked_order.executed_amount_base
-            order_type_description = tracked_order.order_type_description
-            order_type = tracked_order.order_type
-            if new_confirmed_amount == s_decimal_0:
-                execute_price = s_decimal_0
-            else:
-                # Generate new OrderFilledEvent for each new fill associated with the order
-                # Continues to generate OrderFilledEvents until remaining_diff equals 0
-                remaining_diff = execute_amount_diff
-                order_index = -1
-                while remaining_diff > 0:
-                    execute_price = Decimal(order_update["fills"][order_index]["price"])
-                    fill_amount = Decimal(order_update["fills"][order_index]["quantity"])
-                    order_filled_event = OrderFilledEvent(
-                        self._current_timestamp,
-                        tracked_order.client_order_id,
-                        tracked_order.trading_pair,
-                        tracked_order.trade_type,
-                        order_type,
-                        execute_price,
-                        fill_amount,
-                        self.get_fee(
-                            tracked_order.base_asset,
-                            tracked_order.quote_asset,
-                            order_type,
-                            tracked_order.trade_type,
-                            execute_price,
-                            execute_amount_diff,
-                        ),
-                        # Idex's websocket stream tags events with order_id rather than trade_id
-                        # Using order_id here for easier data validation
-                        exchange_trade_id=exchange_order_id,
-                    )
-                    self.logger().info(f"Filled {execute_amount_diff} out of {tracked_order.amount} of the "
-                                       f"{order_type_description} order {client_order_id}.")
-                    self.c_trigger_event(self.MARKET_ORDER_FILLED_EVENT_TAG, order_filled_event)
-                    # Subtract fill amount from remaining diff to identify any more untracked OrderFilledEvents
-                    remaining_diff -= fill_amount
-                    # Subtract 1 from order index to access earlier fills if there is still a remaining_diff
-                    order_index -= 1
-
-            # Update the tracked order
-            tracked_order.last_state = order_update["status"]
-            tracked_order.executed_amount_base = new_confirmed_amount
-            tracked_order.executed_amount_quote = Decimal(order_update["avgExecutionPrice"])
-            # Get total fees paid so far
-            total_fees = 0
-            for fill in order_update["fills"]:
-                for fee in fill["fee"]:
-                    total_fees += fee
-            tracked_order.fee_paid = Decimal(total_fees)
-            if tracked_order.is_done:
-                if not tracked_order.is_failure:
-                    if tracked_order.trade_type == TradeType.BUY:
-                        self.logger().info(f"The market buy order {tracked_order.client_order_id} has completed "
-                                           f"according to order status API.")
-                        self.c_trigger_event(self.MARKET_BUY_ORDER_COMPLETED_EVENT_TAG,
-                                             BuyOrderCompletedEvent(self._current_timestamp,
-                                                                    tracked_order.client_order_id,
-                                                                    tracked_order.base_asset,
-                                                                    tracked_order.quote_asset,
-                                                                    (tracked_order.fee_asset
-                                                                     or tracked_order.base_asset),
-                                                                    tracked_order.executed_amount_base,
-                                                                    tracked_order.executed_amount_quote,
-                                                                    tracked_order.fee_paid,
-                                                                    order_type))
-                    else:
-                        self.logger().info(f"The market sell order {tracked_order.client_order_id} has completed "
-                                           f"according to order status API.")
-                        self.c_trigger_event(self.MARKET_SELL_ORDER_COMPLETED_EVENT_TAG,
-                                             SellOrderCompletedEvent(self._current_timestamp,
-                                                                     tracked_order.client_order_id,
-                                                                     tracked_order.base_asset,
-                                                                     tracked_order.quote_asset,
-                                                                     (tracked_order.fee_asset
-                                                                      or tracked_order.quote_asset),
-                                                                     tracked_order.executed_amount_base,
-                                                                     tracked_order.executed_amount_quote,
-                                                                     tracked_order.fee_paid,
-                                                                     order_type))
-                else:
-                    self.logger().info(f"The market order {tracked_order.client_order_id} has failed/been cancelled "
-                                       f"according to order status API.")
-                    self.c_trigger_event(self.MARKET_ORDER_CANCELLED_EVENT_TAG,
-                                         OrderCancelledEvent(
-                                             self._current_timestamp,
-                                             tracked_order.client_order_id
-                                         ))
-                self.c_stop_tracking_order(tracked_order.client_order_id)
-        self._last_order_update_timestamp = self._current_timestamp
-
-    async def _update_order_fills_from_trades(self):
-        """ Backup in case user stream events are not working. Gets filled trade events with ID for orders"""
-
-        last_tick = self._last_poll_timestamp / self.UPDATE_ORDER_STATUS_MIN_INTERVAL
-        current_tick = self.current_timestamp / self.UPDATE_ORDER_STATUS_MIN_INTERVAL
+        last_tick = int(self._last_poll_timestamp / self.UPDATE_ORDER_STATUS_MIN_INTERVAL)
+        current_tick = int(self.current_timestamp / self.UPDATE_ORDER_STATUS_MIN_INTERVAL)
 
         if current_tick > last_tick and len(self._in_flight_orders) > 0:
             tracked_orders = list(self._in_flight_orders.values())
+            tasks = []
+            for tracked_order in tracked_orders:
+                order_id = await tracked_order.get_exchange_order_id()
+                tasks.append(self.get_order(order_id))
+            self.logger().debug(f"Polling for order status updates of {len(tasks)} orders.")
+            update_results = await safe_gather(*tasks, return_exceptions=True)
+            for update_result in update_results:
+                if isinstance(update_result, Exception):
+                    raise update_result
+                for fill_msg in update_result["fills"]:
+                    await self._process_fill_message(fill_msg)
+                self._process_order_message(update_result)
 
+    def _process_order_message(self, order_msg: Dict[str, Any]):
+        """
+        Updates in-flight order and triggers cancellation or failure event if needed.
+        :param order_msg: The order response from either REST or web socket API (they are of the same format)
+        """
+        client_order_id = order_msg["clientOrderId"]
+        if client_order_id not in self._in_flight_orders:
+            return
+        tracked_order = self._in_flight_orders[client_order_id]
+        # Update order execution status
+        tracked_order.last_state = order_msg["status"]
+        if tracked_order.is_cancelled:
+            self.logger().info(f"Successfully cancelled order {client_order_id}.")
+            self.trigger_event(MarketEvent.OrderCancelled,
+                               OrderCancelledEvent(
+                                   self.current_timestamp,
+                                   client_order_id))
+            tracked_order.cancelled_event.set()
+            self.stop_tracking_order(client_order_id)
+        elif tracked_order.is_failure:
+            self.logger().info(f"The market order {client_order_id} has failed according to order status API. "
+                               f"Reason: {order_msg['message']}") # TODO: confirm message returned from order fail
+            self.trigger_event(MarketEvent.OrderFailure,
+                               MarketOrderFailureEvent(
+                                   self.current_timestamp,
+                                   client_order_id,
+                                   tracked_order.order_type
+                               ))
+            self.stop_tracking_order(client_order_id)
+
+    async def _process_trade_message(self, fill_msg: Dict[str, Any]):
+        """
+        Updates in-flight order and trigger order filled event for trade message received. Triggers order completed
+        event if the total executed amount equals to the specified order amount.
+        """
+        for order in self._in_flight_orders.values():
+            await order.get_exchange_order_id()
+        track_order = [o for o in self._in_flight_orders.values() if fill_msg["orderId"] == o.exchange_order_id]
+        if not track_order:
+            return
+        tracked_order = track_order[0]
+        updated = tracked_order.update_with_trade_update(fill_msg)
+        if not updated:
+            return
+        self.trigger_event(
+            MarketEvent.OrderFilled,
+            OrderFilledEvent(
+                self.current_timestamp,
+                tracked_order.client_order_id,
+                tracked_order.trading_pair,
+                tracked_order.trade_type,
+                tracked_order.order_type,
+                Decimal(str(fill_msg["price"])),
+                Decimal(str(fill_msg["quantity"])),
+                TradeFee(0.0, [(fill_msg["feeAsset"], Decimal(str(fill_msg["fee"])))]),
+                exchange_trade_id=fill_msg["orderId"]
+            )
+        )
+        if math.isclose(tracked_order.executed_amount_base, tracked_order.amount) or \
+                tracked_order.executed_amount_base >= tracked_order.amount:
+            tracked_order.last_state = "filled"
+            self.logger().info(f"The {tracked_order.trade_type.name} order "
+                               f"{tracked_order.client_order_id} has completed "
+                               f"according to order status API.")
+            event_tag = MarketEvent.BuyOrderCompleted if tracked_order.trade_type is TradeType.BUY \
+                else MarketEvent.SellOrderCompleted
+            event_class = BuyOrderCompletedEvent if tracked_order.trade_type is TradeType.BUY \
+                else SellOrderCompletedEvent
+            self.trigger_event(event_tag,
+                               event_class(self.current_timestamp,
+                                           tracked_order.client_order_id,
+                                           tracked_order.base_asset,
+                                           tracked_order.quote_asset,
+                                           tracked_order.fee_asset,
+                                           tracked_order.executed_amount_base,
+                                           tracked_order.executed_amount_quote,
+                                           tracked_order.fee_paid,
+                                           tracked_order.order_type))
+            self.stop_tracking_order(tracked_order.client_order_id)
 
 
 
