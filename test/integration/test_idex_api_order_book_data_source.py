@@ -342,9 +342,12 @@ class IdexAPIOrderBookDataSourceUnitTest(unittest.TestCase):
             # Validate the actual content injected is dict type
             self.assertIsInstance(event.content, dict)
 
+    @patch(WS_FEED, new_callable=PropertyMock)
     @patch(PATCH_BASE_PATH.format(method='_inner_messages'))
     def test_listen_for_trades(self, mock_inner_messages):
         timeout = 2
+
+        mock_ws_feed.return_value = "wss://websocket-eth.idex.io/v1"
 
         q = asyncio.Queue()
 
