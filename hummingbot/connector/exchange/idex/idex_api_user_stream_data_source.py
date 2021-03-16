@@ -42,11 +42,25 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
         self._current_listen_key = None
         self._listen_for_user_stream_task = None
         self._last_recv_time: float = 0
+        self.sub_token: str = ""
         super(IdexAPIUserStreamDataSource, self).__init__()
 
     @property
     def last_recv_time(self) -> float:
         return self._last_recv_time
+
+    async def get_ws_auth_token(self) -> str:
+        user_wallet_address = IdexAuth.get_wallet_address()
+        # TODO: elliott-- make ws auth dict token (better)
+        auth_dict: Dict[str] = self._idex_auth.auth_for_ws("/wsToken", "", user_wallet_address)
+
+        # token required for balances and orders
+        async with aiohttp.ClientSession() as client:
+            resp = await client.get(f"{IDEX_REST_URL}/v1/wsToken?{auth_dict}")  # TODO: Elliott-- ugly
+
+            resp_json = await resp.json()
+
+            return resp_json["token"]
 
     async def listen_for_user_stream(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
         """
@@ -77,18 +91,8 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                         "markets": self._trading_pairs,
                         "subscriptions": ["orders", "trades", "balances"],
                     }
-                    self.sub_token = ""
-                    user_wallet_address = IdexAuth.get_wallet_address()
-                    # TODO: elliott-- make ws auth dict token (better)
-                    auth_dict: Dict[str] = self._idex_auth.auth_for_ws("/wsToken", "", user_wallet_address)
 
-                    # token required for balances and orders
-                    async with aiohttp.ClientSession() as client:
-                        resp = await client.get(f"{IDEX_REST_URL}/v1/wsToken?{auth_dict}")  # TODO: Elliott-- ugly
-
-                        resp_json = await resp.json()
-
-                        self.sub_token = resp_json["token"]
+                    self.sub_token = self.get_ws_auth_token()
 
                     subscribe_request.update({"token": self.sub_token})
                     # TODO:  elliott -- check if auth_dict changed in new version
