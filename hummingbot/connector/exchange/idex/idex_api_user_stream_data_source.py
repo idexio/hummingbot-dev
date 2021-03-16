@@ -13,6 +13,9 @@ import ujson
 import websockets
 from websockets.exceptions import ConnectionClosed
 
+from hummingbot.core.data_type.order_book_message import OrderBookMessage
+# TODO: elliott, not recogizing idex_order_book.. cython?
+from hummingbot.connector.exchange.idex.idex_order_book import IdexOrderbook
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
 from hummingbot.logger import HummingbotLogger
 
@@ -46,13 +49,23 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
         super(IdexAPIUserStreamDataSource, self).__init__()
 
     @property
+    def order_book_class(self):
+        """
+        *required
+        Get relevant order book class to access class specific methods
+        :returns: OrderBook class
+        """
+        return IdexOrderbook
+
+    @property
     def last_recv_time(self) -> float:
         return self._last_recv_time
 
+    @property
     async def get_ws_auth_token(self) -> str:
-        user_wallet_address = IdexAuth.get_wallet_address()
+        user_wallet_address = self._idex_auth.get_wallet_address()
         # TODO: elliott-- make ws auth dict token (better)
-        auth_dict: Dict[str] = self._idex_auth.auth_for_ws("/wsToken", "", user_wallet_address)
+        auth_dict: Dict[str] = self._idex_auth.generate_auth_dict_for_ws("/wsToken", "", user_wallet_address)
 
         # token required for balances and orders
         async with aiohttp.ClientSession() as client:
@@ -92,7 +105,7 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                         "subscriptions": ["orders", "trades", "balances"],
                     }
 
-                    self.sub_token = self.get_ws_auth_token()
+                    self.sub_token = self.get_ws_auth_token
 
                     subscribe_request.update({"token": self.sub_token})
                     # TODO:  elliott -- check if auth_dict changed in new version
@@ -109,14 +122,12 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                             raise ValueError(f"idex Websocket received error message - {msg['data']}")
                         elif msg_type in ["open", "match", "change", "done"]:
                             pass
-                            # order_book_message: OrderBookMessage = self.order_book_class.diff_message_from_exchange(msg)
-                            # output.put_nowait(order_book_message)
-
                         elif msg_type in ["balances", "orders", "trades"]:
                             # Users balances
                             # order_book_message: OrderBookMessage = self.order_book_class.diff_message_from_exchange(msg)
                             # output.put_nowait(order_book_message)
-
+                            ob_msg: OrderBookMessage = self.order_book_class.trade_message_from_exchange(msg)
+                            output.put_nowait(ob_msg)
                             # asset = msg['data']['a']
                             # quantity = msg['data']['q']
                             pass  # TODO: elliott-- delete and send message
@@ -166,3 +177,36 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
             return
         finally:
             await ws.close()
+
+
+# ========================= Deprecated Alternative, Delete Soon ======================================
+
+# # NOTE: I originally had this in idex_auth but moved the helper function to idex_u_s_d_source here.
+
+#     def auth_for_ws(
+#             self,
+#             url: str,
+#             params: Dict[str, any],
+#             body: Dict[str, any] = None,
+#             wallet_signature: str = None) -> Dict[str, any]:
+#         """Source: https://docs.idex.io/#get-authentication-token"""
+#
+#         # NOTE: wallet required for token retrieval
+#         wallet_address_target = self.get_wallet_address()
+#         params.update({"wallet": wallet_address_target})
+#
+#         # NOTE: nonce required for ws auth token retrieval
+#         if "nonce" not in params:
+#             params.update({
+#                 "nonce": self.generate_nonce()
+#             })
+#
+#         params = urlencode(params)
+#         url = f"{url}?{params}"
+#         return {
+#             "headers": {
+#                 "IDEX-API-Key": self.api_key,
+#                 "IDEX-HMAC-Signature": self.sign(params)
+#             },
+#             "url": url
+#         }
