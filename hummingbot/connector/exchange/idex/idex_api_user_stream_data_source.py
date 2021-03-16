@@ -85,7 +85,6 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                     # token required for balances and orders
                     async with aiohttp.ClientSession() as client:
                         resp = await client.get(f"{IDEX_REST_URL}/v1/wsToken?{auth_dict}")  # TODO: Elliott-- ugly
-                        # TODO: elliott -- /v1/ is in base url I believe, grabbed from obds
 
                         resp_json = await resp.json()
 
@@ -109,28 +108,14 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                             # order_book_message: OrderBookMessage = self.order_book_class.diff_message_from_exchange(msg)
                             # output.put_nowait(order_book_message)
 
-                        elif msg_type in ["balances"]:
+                        elif msg_type in ["balances", "orders", "trades"]:
                             # Users balances
-                            asset = msg['data']['a']
-                            quantity = msg['data']['q']
-                            # TODO:  elliott -- update balances
-                            print('%s, %s' % (asset, quantity))
+                            # order_book_message: OrderBookMessage = self.order_book_class.diff_message_from_exchange(msg)
+                            # output.put_nowait(order_book_message)
 
-                        elif msg_type in ["orders"]:
-                            # Users orders
-                            price = msg['data']['p']
-                            quantity = msg['data']['q']
-                            status = msg['data']['X']
-                            # TODO:  elliott -- update orders
-                            print('%s, %s, %s' % (price, quantity, status))
-
-                        elif msg_type in ["trades"]:
-                            # Users trades
-                            price = msg['data']['p']
-                            quantity = msg['data']['q']
-                            side = msg['data']['s']
-                            # TODO:  elliott -- update trades
-                            print('%s, %s, %s' % (price, quantity, side))
+                            # asset = msg['data']['a']
+                            # quantity = msg['data']['q']
+                            pass  # TODO: elliott-- delete and send message
 
                         elif msg_type in ["ping"]:
                             # NOTE: ping every 3 min, closed if no pong after 10 min
