@@ -2,6 +2,8 @@ from typing import Optional
 
 from hummingbot.client.config.config_var import ConfigVar
 from hummingbot.client.config.config_methods import using_exchange
+from hummingbot.client.config.global_config_map import global_config_map
+
 
 CENTRALIZED = False
 
@@ -25,6 +27,23 @@ IDEX_WS_FEED_FMT = "wss://websocket-sandbox-{blockchain}.idex.io/v1"
 def validate_idex_contract_blockchain(value: str) -> Optional[str]:
     if value not in IDEX_BLOCKCHAINS:
         return f'Value {value} must be one of: {IDEX_BLOCKCHAINS}'
+
+
+def get_idex_rest_url() -> str:
+    _IDEX_REST_URL = IDEX_REST_URL_FMT.format(
+        blockchain=global_config_map["idex_contract_blockchain"].value or global_config_map[
+            "idex_contract_blockchain"].default
+    )
+    return _IDEX_REST_URL
+
+
+def get_idex_ws_feed() -> str:
+    _IDEX_WS_FEED = IDEX_WS_FEED_FMT.format(
+        blockchain=global_config_map["idex_contract_blockchain"].value or global_config_map[
+            "idex_contract_blockchain"].default
+    )
+    return _IDEX_WS_FEED
+
 
 KEYS = {
     "idex_api_key":
