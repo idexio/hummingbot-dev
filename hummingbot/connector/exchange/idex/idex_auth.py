@@ -28,6 +28,7 @@ class IdexAuth:
 
         self.init_wallet(wallet_private_key)
 
+
     @staticmethod
     def encode(s: str) -> bytes:
         return s.encode('latin-1')
@@ -125,17 +126,17 @@ class IdexAuth:
 
         if "nonce" not in params:
             params.update({
-                "nonce": self.generate_nonce()
+                "nonce": self.get_nonce_str()
             })
 
-        params = urlencode(params)
+        params = urlencode(params)  # todo alf: order of param fields for signature ?
         url = f"{url}?{params}"
         # NOTE: headers my be unnecessary here.
         # https://docs.idex.io/?javascript#get-authentication-token
         return {
             "headers": {
-                "IDEX-API-Key": self.api_key,
-                "IDEX-HMAC-Signature": self.sign(params)
+                "IDEX-API-Key": self._api_key,
+                "IDEX-HMAC-Signature": self.hmac_sign(params)
             },
             "url": url
         }
