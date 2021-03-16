@@ -40,6 +40,7 @@ class IdexUserStreamTracker(UserStreamTracker):
             )
         return self._data_source
 
+    # TODO: elliott-- recall considering getting rid of utils, if so we can localize this
     @property
     def exchange_name(self) -> str:
         return EXCHANGE_NAME
