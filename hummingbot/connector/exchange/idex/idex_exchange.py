@@ -330,6 +330,7 @@ class IdexExchange(ExchangeBase):
 
         idex_order_type = to_idex_order_type(order_type)
         idex_trade_type = to_idex_trade_type(trade_type)
+
         amount = self.quantize_order_amount(trading_pair, amount)
         price = self.quantize_order_price(trading_pair, price)
         if amount < trading_rule.min_order_size:       # TODO: Implement _trading_rules_polling_loop()

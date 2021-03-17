@@ -1,5 +1,7 @@
 from typing import Optional
 
+import typing
+
 from hummingbot.client.config.config_validators import validate_bool
 from hummingbot.client.config.config_var import ConfigVar
 from hummingbot.client.config.config_methods import using_exchange
@@ -131,8 +133,10 @@ HB_TRADE_TYPE_MAP = {
     TradeType.SELL: "sell",
 }
 
+
 def to_idex_trade_type(trade_type: str):
     return HB_TRADE_TYPE_MAP[trade_type]
+
 
 KEYS = {
     "idex_api_key":
