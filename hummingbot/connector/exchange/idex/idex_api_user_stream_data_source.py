@@ -1,7 +1,7 @@
-import time
 import asyncio
+import time
 import logging
-import aiohttp
+# import aiohttp
 from typing import (
     AsyncIterable,
     Dict,
@@ -13,19 +13,12 @@ import ujson
 import websockets
 from websockets.exceptions import ConnectionClosed
 
-from hummingbot.core.data_type.order_book_message import OrderBookMessage
-# TODO: elliott, not recogizing idex_order_book.. cython?
+from hummingbot.connector.exchange.idex.idex_utils import get_idex_ws_feed
 from hummingbot.connector.exchange.idex.idex_order_book import IdexOrderbook
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
 from hummingbot.logger import HummingbotLogger
-
 # from .client.asyncio import AsyncIdexClient
 from .idex_auth import IdexAuth
-# from .utils import get_markets
-IDEX_WS_FEED = "wss://websocket-eth.idex.io/v1"
-IDEX_REST_URL = "https://api-eth.idex.io/"
-# TODO: elliott-- to v1 or not to v1,
-# also declaring of these instead of config mapping??
 
 
 class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
@@ -61,19 +54,20 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
     def last_recv_time(self) -> float:
         return self._last_recv_time
 
-    @property
-    async def get_ws_auth_token(self) -> str:
-        user_wallet_address = self._idex_auth.get_wallet_address()
-        # TODO: elliott-- make ws auth dict token (better)
-        auth_dict: Dict[str] = self._idex_auth.generate_auth_dict_for_ws("/wsToken", "", user_wallet_address)
-
-        # token required for balances and orders
-        async with aiohttp.ClientSession() as client:
-            resp = await client.get(f"{IDEX_REST_URL}/v1/wsToken?{auth_dict}")  # TODO: Elliott-- ugly
-
-            resp_json = await resp.json()
-
-            return resp_json["token"]
+    # ------------------ Deprecated function for a version in idex_auth -------------------
+    # @property
+    # async def get_ws_auth_token(self) -> str:
+    #     user_wallet_address = self._idex_auth.get_wallet_address()
+    #     # TODO: elliott-- make ws auth dict token (better)
+    #     auth_dict: Dict[str] = self._idex_auth.generate_auth_dict_for_ws("/wsToken", "", user_wallet_address)
+    #     IDEX_REST_URL = idex_utils.get_idex_rest_url()
+    #     # token required for balances and orders
+    #     async with aiohttp.ClientSession() as client:
+    #         resp = await client.get(f"{IDEX_REST_URL}/v1/wsToken?{auth_dict}")  # TODO: Elliott-- ugly
+    #
+    #         resp_json = await resp.json()
+    #
+    #         return resp_json["token"]
 
     async def listen_for_user_stream(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
         """
@@ -94,7 +88,7 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
         }
 
         """
-
+        IDEX_WS_FEED = get_idex_ws_feed()
         while True:
             try:
                 async with websockets.connect(IDEX_WS_FEED) as ws:
@@ -105,7 +99,7 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                         "subscriptions": ["orders", "trades", "balances"],
                     }
 
-                    self.sub_token = self.get_ws_auth_token
+                    self.sub_token = self._idex_auth.fetch_ws_token()
 
                     subscribe_request.update({"token": self.sub_token})
                     # TODO:  elliott -- check if auth_dict changed in new version
@@ -120,16 +114,9 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                             raise ValueError(f"idex Websocket message does not contain a type - {msg}")
                         elif msg_type == "error":
                             raise ValueError(f"idex Websocket received error message - {msg['data']}")
-                        elif msg_type in ["open", "match", "change", "done"]:
-                            pass
-                        elif msg_type in ["balances", "orders", "trades"]:
-                            # Users balances
-                            # order_book_message: OrderBookMessage = self.order_book_class.diff_message_from_exchange(msg)
-                            # output.put_nowait(order_book_message)
-                            ob_msg: OrderBookMessage = self.order_book_class.trade_message_from_exchange(msg)
-                            output.put_nowait(ob_msg)
-                            # asset = msg['data']['a']
-                            # quantity = msg['data']['q']
+                        elif msg_type in ["balances", "orders"]:
+                            # FIXME: We should be digesting orders/fills and balances not orders
+                            # FIXME: borrow from binance/kraken, and test
                             pass  # TODO: elliott-- delete and send message
 
                         elif msg_type in ["ping"]:
