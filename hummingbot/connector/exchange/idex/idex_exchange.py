@@ -34,7 +34,7 @@ from .idex_in_flight_order import IdexInFlightOrder
 from .idex_order_book_tracker import IdexOrderBookTracker
 from .idex_user_stream_tracker import IdexUserStreamTracker
 from .idex_utils import get_idex_rest_url, get_idex_ws_feed, to_idex_order_type, from_idex_order_type, \
-    from_idex_trade_type, to_idex_trade_type, EXCHANGE_NAME
+    from_idex_trade_type, to_idex_trade_type, EXCHANGE_NAME, get_new_client_order_id
 from .types.rest.request import RestRequestCancelOrder, RestRequestCancelAllOrders, RestRequestOrder, OrderSide
 from .types.websocket.response import WebSocketResponseTradeShort, \
     WebSocketResponseOrderShort
@@ -131,64 +131,38 @@ class IdexExchange(ExchangeBase):
         """
         pass
 
-    async def execute_buy(self,
-                          order_id: str,
-                          trading_pair: str,
-                          amount: Decimal,
-                          order_type: OrderType,
-                          price: Optional[Decimal] = s_decimal_NaN):
-        return await self._create_order(
-            "buy",
-            order_id,
-            trading_pair,
-            amount,
-            order_type,
-            price
-        )
-
-    async def execute_sell(self,
-                           order_id: str,
-                           trading_pair: str,
-                           amount: Decimal,
-                           order_type: OrderType,
-                           price: Optional[Decimal] = s_decimal_NaN):
-        return await self._create_order(
-            "sell",
-            order_id,
-            trading_pair,
-            amount,
-            order_type,
-            price
-        )
-
-    def buy(self, trading_pair: str, amount: Decimal, order_type=OrderType.MARKET, price: Decimal = s_decimal_NaN,
-            **kwargs):
-        order_id = create_id()
-        safe_ensure_future(self._create_order(
-            "buy",
-            order_id,
-            trading_pair,
-            amount,
-            order_type,
-            price
-        ))
+    def buy(self, trading_pair: str, amount: Decimal, order_type=OrderType.MARKET,
+            price: Decimal = s_decimal_NaN, **kwargs) -> str:
+        """
+        Buys an amount of base asset (of the given trading pair). This function returns immediately.
+        To see an actual order, you'll have to wait for BuyOrderCreatedEvent.
+        :param trading_pair: The market (e.g. BTC-USDT) to buy from
+        :param amount: The amount in base token value
+        :param order_type: The order type
+        :param price: The price (note: this is no longer optional)
+        :returns A new internal order id
+        """
+        order_id: str = get_new_client_order_id(True, trading_pair)
+        safe_ensure_future(self._create_order(TradeType.BUY, order_id, trading_pair, amount, order_type, price))
         return order_id
 
     # def amount_to_precision(self, symbol, amount):
         # return self.decimal_to_precision(amount, TRUNCATE, self.markets[symbol]['precision']['amount'],
     # self.precisionMode, self.paddingMode)
 
-    def sell(self, trading_pair: str, amount: Decimal, order_type=OrderType.MARKET, price: Decimal = s_decimal_NaN,
-             **kwargs):
-        order_id = create_id()
-        safe_ensure_future(self._create_order(
-            "sell",
-            order_id,
-            trading_pair,
-            amount,
-            order_type,
-            price
-        ))
+    def sell(self, trading_pair: str, amount: Decimal, order_type=OrderType.MARKET,
+             price: Decimal = s_decimal_NaN, **kwargs) -> str:
+        """
+        Sells an amount of base asset (of the given trading pair). This function returns immediately.
+        To see an actual order, you'll have to wait for SellOrderCreatedEvent.
+        :param trading_pair: The market (e.g. BTC-USDT) to sell from
+        :param amount: The amount in base token value
+        :param order_type: The order type
+        :param price: The price (note: this is no longer optional)
+        :returns A new internal order id
+        """
+        order_id: str = get_new_client_order_id(False, trading_pair)
+        safe_ensure_future(self._create_order(TradeType.SELL, order_id, trading_pair, amount, order_type, price))
         return order_id
 
     async def _api_request(self,
