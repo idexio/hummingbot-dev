@@ -263,18 +263,31 @@ class IdexExchange(ExchangeBase):
             "wallet": self._idex_auth.get_wallet_address()
         })
         signature_parameters = self._idex_auth.build_signature_params_for_order(
+                            # TODO Brian: Did not include: stop_price, time_in_force, and selftrade_prevention. Add later as required.
                             market=params["market"],
-                            order_type=OrderTypeEnum.limit,
-                            order_side=params["side"],
+                            order_type=OrderTypeEnum[params["type"]],
+                            order_side=OrderTypeEnum[params["side"]],
                             order_quantity=params["quantity"],
+                            # I believe this will always be false as the order quantity need only be taken in base terms
                             quantity_in_quote=False,
                             price=params["price"],
-                            client_order_id=params["clientOrderId"]
+                            client_order_id=params["clientOrderId"],
         )
         wallet_signature = self._idex_auth.wallet_sign(signature_parameters)
 
-        auth_dict = self._idex_auth.generate_auth_dict(http_method="POST", url=url, params=params, wallet_signature=wallet_signature)
+        body = {
+            "parameters": params,
+            "signature": wallet_signature
+        }
 
+        auth_dict = self._idex_auth.generate_auth_dict(url=url, body=body, wallet_signature=wallet_signature)
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(auth_dict["url"], body=auth_dict["body"], headers=auth_dict["headers"]) as response:
+                if response.status != 200:
+                    raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
+                data = await response.json()
+                return data
 
     async def get_balance(self) -> Dict[Dict[str, Any]]:
         """ Requests current balances of all assets through API. Returns json data with balance details """
@@ -316,7 +329,7 @@ class IdexExchange(ExchangeBase):
         trading_rule = self._trading_rules[trading_pair]  # TODO: Implement _trading_rules_polling_loop()
 
         idex_order_type = to_idex_order_type(order_type)
-        idex_trade_type = to_idex_trade_type((trade_type))
+        idex_trade_type = to_idex_trade_type(trade_type)
         amount = self.quantize_order_amount(trading_pair, amount)
         price = self.quantize_order_price(trading_pair, price)
         if amount < trading_rule.min_order_size:       # TODO: Implement _trading_rules_polling_loop()
