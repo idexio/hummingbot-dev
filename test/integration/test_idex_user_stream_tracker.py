@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 import os
 from os.path import join, realpath
-import sys
+import sys; sys.path.insert(0, realpath(join(__file__, "../../../")))
 
-from hummingbot.connector.exchange.idex.idex_auth import IdexAuth
-
-sys.path.insert(0, realpath(join(__file__, "../../../")))
 import asyncio
 import logging
 import unittest
@@ -13,16 +10,21 @@ import unittest
 from typing import Optional
 
 from hummingbot.connector.exchange.idex.idex_user_stream_tracker import IdexUserStreamTracker
+from hummingbot.connector.exchange.idex.idex_exchange import IdexExchange, IdexAuth
+# from hummingbot.connector.exchange.idex.idex_order_book_message import IdexOrderBookMessage
+
 from hummingbot.core.utils.async_utils import safe_ensure_future
 from hummingbot.connector.exchange.idex.idex_order_book_tracker import IdexOrderBookTracker
-
+from hummingbot.core.event.events import OrderType
 
 logging.basicConfig(level=logging.DEBUG)
 
 
 class IdexOrderBookTrackerUnitTest(unittest.TestCase):
-
     order_book_tracker: Optional[IdexOrderBookTracker] = None
+
+    market: IdexExchange
+    first_order = OrderType.LIMIT
 
     @classmethod
     def setUpClass(cls):
