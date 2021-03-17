@@ -342,6 +342,7 @@ class IdexAPIOrderBookDataSourceUnitTest(unittest.TestCase):
             # Validate the actual content injected is dict type
             self.assertIsInstance(event.content, dict)
 
+    @patch(PATCH_BASE_PATH.format(method='_inner_messages'))
     def test_listen_for_trades(self, mock_inner_messages):
         timeout = 2
 
