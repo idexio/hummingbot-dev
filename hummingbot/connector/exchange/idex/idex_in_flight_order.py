@@ -9,10 +9,6 @@ from hummingbot.connector.in_flight_order_base import InFlightOrderBase
 
 
 class IdexInFlightOrder(InFlightOrderBase):
-    """
-    TODO: Test it
-    """
-
     def __init__(self,
                  client_order_id: str,
                  exchange_order_id: str,
@@ -23,7 +19,6 @@ class IdexInFlightOrder(InFlightOrderBase):
                  amount: Decimal,
                  initial_state: str = "open"):
         """
-
         :param order_id:
         :param exchange_order_id:
         :param trading_pair:
