@@ -14,7 +14,7 @@ import websockets
 from websockets.exceptions import ConnectionClosed
 
 from hummingbot.connector.exchange.idex.idex_utils import get_idex_ws_feed
-from hummingbot.connector.exchange.idex.idex_order_book import IdexOrderbook
+# from hummingbot.connector.exchange.idex.idex_order_book import idex_order_book import IdexOrderbook
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
 from hummingbot.logger import HummingbotLogger
 # from .client.asyncio import AsyncIdexClient
@@ -41,14 +41,15 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
         self.sub_token: str = ""
         super(IdexAPIUserStreamDataSource, self).__init__()
 
-    @property
-    def order_book_class(self):
-        """
-        *required
-        Get relevant order book class to access class specific methods
-        :returns: OrderBook class
-        """
-        return IdexOrderbook
+    # @property
+    # def order_book_class(self):
+    #     """
+    #     # NOTE: This doesn't actually seem to be used anywhere
+    #     *required
+    #     Get relevant order book class to access class specific methods
+    #     :returns: OrderBook class
+    #     """
+    #     return IdexOrderbook
 
     @property
     def last_recv_time(self) -> float:
