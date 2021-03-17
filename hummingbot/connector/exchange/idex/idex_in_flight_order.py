@@ -43,7 +43,7 @@ class IdexInFlightOrder(InFlightOrderBase):
             amount,
             initial_state,
         )
-        self.trade_id_set = set()
+        self.fill_id_set = set()
         self.cancelled_event = asyncio.Event()
 
     @property
