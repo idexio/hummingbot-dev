@@ -58,12 +58,11 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
     # @property
     # async def get_ws_auth_token(self) -> str:
     #     user_wallet_address = self._idex_auth.get_wallet_address()
-    #     # TODO: elliott-- make ws auth dict token (better)
     #     auth_dict: Dict[str] = self._idex_auth.generate_auth_dict_for_ws("/wsToken", "", user_wallet_address)
     #     IDEX_REST_URL = idex_utils.get_idex_rest_url()
     #     # token required for balances and orders
     #     async with aiohttp.ClientSession() as client:
-    #         resp = await client.get(f"{IDEX_REST_URL}/v1/wsToken?{auth_dict}")  # TODO: Elliott-- ugly
+    #         resp = await client.get(f"{IDEX_REST_URL}/v1/wsToken?{auth_dict}")
     #
     #         resp_json = await resp.json()
     #
@@ -86,7 +85,6 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                 "trades"
             ]
         }
-
         """
         IDEX_WS_FEED = get_idex_ws_feed()
         while True:
@@ -102,7 +100,6 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                     self.sub_token = self._idex_auth.fetch_ws_token()
 
                     subscribe_request.update({"token": self.sub_token})
-                    # TODO:  elliott -- check if auth_dict changed in new version
 
                     # send sub request
                     await ws.send(ujson.dumps(subscribe_request))
@@ -116,8 +113,8 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                             raise ValueError(f"idex Websocket received error message - {msg['data']}")
                         elif msg_type in ["balances", "orders"]:
                             # FIXME: We should be digesting orders/fills and balances not orders
-                            # FIXME: borrow from binance/kraken, and test
-                            pass  # TODO: elliott-- delete and send message
+                            # NOTE: borrowed from binance, makes some sense from coinbase too-- test.
+                            output.put_nowait(msg)
 
                         elif msg_type in ["ping"]:
                             # NOTE: ping every 3 min, closed if no pong after 10 min
