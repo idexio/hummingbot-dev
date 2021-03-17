@@ -64,6 +64,7 @@ class IdexExchange(ExchangeBase):
         """
         super().__init__()
         self._trading_required = trading_required
+        self._trading_pairs = trading_pairs
         self._idex_auth: IdexAuth = IdexAuth(idex_api_key, idex_api_secret_key, idex_wallet_private_key)
         self._account_available_balances = {}  # Dict[asset_name:str, Decimal]
         self._client: AsyncIdexClient = AsyncIdexClient(auth=self._idex_auth)
@@ -219,7 +220,7 @@ class IdexExchange(ExchangeBase):
 
 # API Calls
 
-    async def get_orders(self) -> Dict[str, Any]:
+    async def get_orders(self) -> List[Dict[str, Any]]:
         """ Requests status of all active orders. Returns json data of all orders associated with wallet address """
 
         rest_url = get_idex_rest_url()
@@ -237,13 +238,31 @@ class IdexExchange(ExchangeBase):
                 return data
 
     async def get_order(self, exchange_order_id: str) -> Dict[str, Any]:
-        """ Confirms exchange ID of tracked order and requests it through API. Returns json data with order details """
+        """ Requests order information through API with exchange orderId. Returns json data with order details """
 
         rest_url = get_idex_rest_url()
         url = f"{rest_url}v1/orders/?orderId={exchange_order_id}"
         params = {
             "nonce": self._idex_auth.get_nonce_str(),
             "wallet": self._idex_auth.get_wallet_address()
+        }
+        auth_dict = self._idex_auth.generate_auth_dict(http_method="GET", url=url, params=params)
+        async with aiohttp.ClientSession() as session:
+            async with session.get(auth_dict["url"], headers=auth_dict["headers"]) as response:
+                if response.status != 200:
+                    raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
+                data = await response.json()
+                return data
+
+    async def get_balance(self) -> Dict[Dict[str, Any]]:
+        """ Requests current balances of all assets through API. Returns json data with balance details """
+
+        rest_url = get_idex_rest_url()
+        url = f"{rest_url}v1/balances/"
+        params = {
+            "nonce": self._idex_auth.get_nonce_str(),
+            "wallet": self._idex_auth.get_wallet_address(),
+            "asset": self._trading_pairs
         }
         auth_dict = self._idex_auth.generate_auth_dict(http_method="GET", url=url, params=params)
         async with aiohttp.ClientSession() as session:
@@ -468,22 +487,23 @@ class IdexExchange(ExchangeBase):
         self._status_polling_task = self._user_stream_tracker_task = self._user_stream_event_listener_task = None
 
     async def _status_polling_loop(self):
+        """ Periodically update user balances and order status via REST API. Fallback measure for ws API updates. """
+
         while True:
             try:
                 self._poll_notifier = asyncio.Event()
                 await self._poll_notifier.wait()
                 await safe_gather(
-                    self._update_balances("_status_polling_loop"),
+                    self._update_balances(),
                     self._update_order_status(),
-                    asyncio.sleep(1),
-                    # self._update_order_fills_from_trades(), # TODO: TBI
                 )
                 self._last_poll_timestamp = self.current_timestamp
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                print(f"Status Polling Loop Error: {e}")
-                self.logger().network("Unexpected error while fetching account updates.", exc_info=True,
+                self.logger().error(str(e), exc_info=True)
+                self.logger().network("Unexpected error while fetching account updates.",
+                                      exc_info=True,
                                       app_warning_msg="Could not fetch account updates from Idex. "
                                                       "Check API key and network connection.")
                 await asyncio.sleep(0.5)
@@ -673,53 +693,21 @@ class IdexExchange(ExchangeBase):
             del self._in_flight_orders[order_id]
 
     async def _update_balances(self, sender=None):
-        balances_available = {}
-        balances = {}
+        """ Calls REST API to update total and available balances. """
 
-        wallets = await self._client.user.wallets()
+        local_asset_names = set(self._account_balances.keys())
+        remote_asset_names = set()
+        account_info = await self.get_balance()
+        for account in account_info:
+            asset_name = account["asset"]
+            self._account_available_balances[asset_name] = Decimal(str(account["availableForTrade"]))
+            self._account_balances[asset_name] = Decimal(str(account["quantity"]))
+            remote_asset_names.add(asset_name)
 
-        wallet_address = self._idex_auth.new_wallet_object().address
-        is_wallet_associated = False
-        for wallet in wallets:
-            if wallet.address == wallet_address:
-                is_wallet_associated = True
-
-        if is_wallet_associated is False:
-            nonce = create_nonce()
-            byteArray = [  # todo: deprecation warning
-                nonce.bytes,
-                IdexAuth.base16_to_binary(self._idex_auth.get_wallet_bytes()),
-            ]
-            binary = IdexAuth.binary_concat_array(byteArray)  # todo: deprecation warning
-            hash = IdexAuth.hash(binary, 'keccak', 'hex')  # todo: deprecation warning
-            # todo: deprecation warning
-            signature = self._idex_auth.sign_message_string(hash, IdexAuth.binary_to_base16(self._idex_auth.new_wallet_object().key))
-            await self._client.user.associate_wallet(str(nonce), wallet_address=wallet_address, wallet_signature=signature)
-
-        # for wallet in wallets:
-        accounts = await self._client.user.balances(wallet=wallet_address)
-        print(f"balances... {accounts}")
-        if len(accounts) == 0:
-            raise Exception("Wallet does not have any token balances. Please deposit some tokens.")
-        for account in accounts:
-            # Set available balance
-            balances_available.setdefault(wallet_address, {})
-            balances_available[wallet_address][account.asset] = Decimal(account.availableForTrade)
-            self._account_available_balances[account.asset] = Decimal(account.availableForTrade)
-
-            # Set balance
-            balances.setdefault(wallet_address, {})
-            balances[wallet_address][account.asset] = Decimal(account.quantity)
-            self._account_balances[account.asset] = Decimal(account.quantity)
-
-    def get_balance(self, currency: str) -> Decimal:
-        """
-        :param currency: The currency (token) name
-        :return: A balance for the given currency (token)
-        """
-        wallet = self._idex_auth.new_wallet_object()
-        # print(f"get_balance: walletAddress: {wallet.address} currency: {currency}")
-        return self._account_balances[wallet.address].get(currency, Decimal(0))
+        asset_names_to_remove = local_asset_names.difference(remote_asset_names)
+        for asset_name in asset_names_to_remove:
+            del self._account_available_balances[asset_name]
+            del self._account_balances[asset_name]
 
     async def _iter_user_event_queue(self) -> AsyncIterable[Dict[str, any]]:
         while True:
