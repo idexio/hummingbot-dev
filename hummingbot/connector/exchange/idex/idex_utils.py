@@ -87,23 +87,6 @@ def validate_idex_contract_blockchain(value: str) -> Optional[str]:
     if value not in IDEX_BLOCKCHAINS:
         return f'Value {value} must be one of: {IDEX_BLOCKCHAINS}'
 
-
-def get_idex_rest_url() -> str:
-    _IDEX_REST_URL = IDEX_REST_URL_FMT.format(
-        blockchain=global_config_map["idex_contract_blockchain"].value or global_config_map[
-            "idex_contract_blockchain"].default
-    )
-    return _IDEX_REST_URL
-
-
-def get_idex_ws_feed() -> str:
-    _IDEX_WS_FEED = IDEX_WS_FEED_FMT.format(
-        blockchain=global_config_map["idex_contract_blockchain"].value or global_config_map[
-            "idex_contract_blockchain"].default
-    )
-    return _IDEX_WS_FEED
-
-
 KEYS = {
     "idex_api_key":
         ConfigVar(key="idex_api_key",
