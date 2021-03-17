@@ -14,7 +14,7 @@ class IdexInFlightOrder(InFlightOrderBase):
     """
 
     def __init__(self,
-                 order_id: str,
+                 client_order_id: str,
                  exchange_order_id: str,
                  trading_pair: str,
                  order_type: OrderType,
@@ -34,7 +34,7 @@ class IdexInFlightOrder(InFlightOrderBase):
         :param initial_state:  open, partiallyFilled, filled, canceled, rejected
         """
         super().__init__(
-            order_id,
+            client_order_id,
             exchange_order_id,
             trading_pair,
             order_type,
