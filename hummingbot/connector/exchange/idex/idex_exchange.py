@@ -282,7 +282,7 @@ class IdexExchange(ExchangeBase):
             "signature": wallet_signature
         }
 
-        auth_dict = self._idex_auth.generate_auth_dict(url=url, body=body, wallet_signature=wallet_signature)
+        auth_dict = self._idex_auth.generate_auth_dict_for_post(url=url, body=body, wallet_signature=wallet_signature)
 
         async with aiohttp.ClientSession() as session:
             async with session.post(auth_dict["url"], body=auth_dict["body"], headers=auth_dict["headers"]) as response:
@@ -301,17 +301,24 @@ class IdexExchange(ExchangeBase):
         }
 
         signature_parameters = self._idex_auth.build_signature_params_for_order(
-            # TODO Brian: Did not include: stop_price, time_in_force, and selftrade_prevention. Add later as required.
             market=trading_pair,
             order_type=OrderTypeEnum[params["type"]],
-            order_side=OrderTypeEnum[params["side"]],
-            order_quantity=params["quantity"],
-            # I believe this will always be false as the order quantity need only be taken in base terms
-            quantity_in_quote=False,
-            price=params["price"],
-            client_order_id=params["clientOrderId"],
         )
         wallet_signature = self._idex_auth.wallet_sign(signature_parameters)
+
+        body = {
+            "parameters": params,
+            "signature": wallet_signature
+        }
+
+        auth_dict = self._idex_auth.generate_auth_dict_for_delete(url=url, body=body, wallet_signature=wallet_signature)
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(auth_dict["url"], body=auth_dict["body"], headers=auth_dict["headers"]) as response:
+                if response.status != 200:
+                    raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
+                data = await response.json()
+                return data
 
     async def get_balances_from_api(self) -> Dict[Dict[str, Any]]:
         """ Requests current balances of all assets through API. Returns json data with balance details """
@@ -439,41 +446,6 @@ class IdexExchange(ExchangeBase):
 
     def cancel(self, trading_pair: str, order_id: str):
         safe_ensure_future(self._cancel_order(trading_pair, order_id))
-
-    async def _cancel_order(self, trading_pair: str, client_order_id: str):
-        # market = await to_idex_pair(trading_pair)
-        nonce = create_nonce()
-        walletBytes = self._idex_auth.get_wallet_bytes()
-        byteArray = [
-            nonce.bytes,
-            IdexAuth.base16_to_binary(walletBytes),  # todo: deprecation warning
-            IdexAuth.encode("client:" + client_order_id),
-        ]
-        binary = IdexAuth.binary_concat_array(byteArray)  # todo: deprecation warning
-        hash = IdexAuth.hash(binary, 'keccak', 'hex')  # todo: deprecation warning
-        self.logger().info(f"Cancel order id: {client_order_id}")
-        # todo: deprecation warning
-        signature = self._idex_auth.sign_message_string(hash, IdexAuth.binary_to_base16(self._idex_auth.new_wallet_object().key))
-        await self._client.trade.cancel_order(
-            parameters=RestRequestCancelOrder(
-                wallet=self._idex_auth.new_wallet_object().address,
-                orderId="client:" + client_order_id,
-                nonce=str(nonce),
-            ),
-            signature=signature
-        )
-        # TODO confirm order was cancelled
-        tracked_order = self._in_flight_orders.get(client_order_id)
-        self.trigger_event(
-            MarketEvent.OrderCancelled,
-            OrderCancelledEvent(
-                self.current_timestamp,
-                client_order_id
-            )
-        )
-        tracked_order.cancelled_event.set()
-        self.stop_tracking_order(client_order_id)
-        return client_order_id
 
     def get_order_book(self, trading_pair: str) -> OrderBook:
         if trading_pair not in self._order_book_tracker.order_books:
