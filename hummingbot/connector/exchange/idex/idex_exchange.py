@@ -559,9 +559,6 @@ class IdexExchange(ExchangeBase):
         # TODO: Need a check on this estimate_fee call. 2nd param should return True if order is a maker (limit orders).
         return estimate_fee(EXCHANGE_NAME, order_type == order_type.is_limit_type())
 
-    async def server_time(self) -> int:
-        return (await self._client.public.get_time()).serverTime
-
     async def _update_order_status(self):
         """
         Calls REST API to get status update for each in-flight order.
