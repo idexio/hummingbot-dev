@@ -518,6 +518,10 @@ class IdexExchange(ExchangeBase):
             amount=amount
         )
 
+    def stop_tracking_order(self, order_id: str):
+        if order_id in self._in_flight_orders:
+            del self._in_flight_orders[order_id]
+
     def get_order_book(self, trading_pair: str) -> OrderBook:
         if trading_pair not in self._order_book_tracker.order_books:
             raise ValueError(f"No order book exists for '{trading_pair}'.")
@@ -552,7 +556,8 @@ class IdexExchange(ExchangeBase):
                 order_side: TradeType,
                 amount: Decimal,
                 price: Decimal = s_decimal_NaN) -> TradeFee:
-        return estimate_fee(EXCHANGE_NAME, order_type == TradeType.BUY)
+        # TODO: Need a check on this estimate_fee call. 2nd param should return True if order is a maker (limit orders).
+        return estimate_fee(EXCHANGE_NAME, order_type == order_type.is_limit_type())
 
     async def server_time(self) -> int:
         return (await self._client.public.get_time()).serverTime
@@ -709,10 +714,6 @@ class IdexExchange(ExchangeBase):
             if not self._poll_notifier.is_set():
                 self._poll_notifier.set()
         self._last_timestamp = timestamp
-
-    def stop_tracking_order(self, order_id: str):
-        if order_id in self._in_flight_orders:
-            del self._in_flight_orders[order_id]
 
     async def _update_balances(self, sender=None):
         """ Calls REST API to update total and available balances. """
