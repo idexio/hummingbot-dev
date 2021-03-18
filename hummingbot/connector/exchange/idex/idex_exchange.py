@@ -575,8 +575,7 @@ class IdexExchange(ExchangeBase):
             for update_result in update_results:
                 if isinstance(update_result, Exception):
                     raise update_result
-                for fill_msg in update_result["fills"]:
-                    await self._process_fill_message(fill_msg, )
+                await self._process_fill_message(update_result)
                 self._process_order_message(update_result)
 
     def _process_order_message(self, order_msg: Dict[str, Any]):
@@ -584,12 +583,12 @@ class IdexExchange(ExchangeBase):
         Updates in-flight order and triggers cancellation or failure event if needed.
         :param order_msg: The order response from either REST or web socket API (they are of the same format)
         """
-        client_order_id = order_msg["clientOrderId"]
+        client_order_id = order_msg.get("c", "clientOrderId")
         if client_order_id not in self._in_flight_orders:
             return
         tracked_order = self._in_flight_orders[client_order_id]
         # Update order execution status
-        tracked_order.last_state = order_msg["status"]
+        tracked_order.last_state = order_msg.get("X", "status")
         if tracked_order.is_cancelled:
             self.logger().info(f"Successfully cancelled order {client_order_id}.")
             self.trigger_event(MarketEvent.OrderCancelled,
@@ -599,8 +598,7 @@ class IdexExchange(ExchangeBase):
             tracked_order.cancelled_event.set()
             self.stop_tracking_order(client_order_id)
         elif tracked_order.is_failure:
-            self.logger().info(f"The market order {client_order_id} has failed according to order status API. "
-                               f"Reason: {order_msg['message']}")  # TODO: confirm message returned from order fail
+            self.logger().info(f"The market order {client_order_id} has been rejected according to order status API.")
             self.trigger_event(MarketEvent.OrderFailure,
                                MarketOrderFailureEvent(
                                    self.current_timestamp,
@@ -609,34 +607,36 @@ class IdexExchange(ExchangeBase):
                                ))
             self.stop_tracking_order(client_order_id)
 
-    async def _process_fill_message(self, fill_msg: Dict[str, Any]):
+    async def _process_fill_message(self, update_msg: Dict[str, Any]):
         """
         Updates in-flight order and trigger order filled event for trade message received. Triggers order completed
         event if the total executed amount equals to the specified order amount.
         """
         for order in self._in_flight_orders.values():
             await order.get_exchange_order_id()
-        track_order = [o for o in self._in_flight_orders.values() if fill_msg["orderId"] == o.exchange_order_id]
+        track_order = [o for o in self._in_flight_orders.values()
+                       if update_msg.get("i", "orderId") == o.exchange_order_id]
         if not track_order:
             return
         tracked_order = track_order[0]
-        updated = tracked_order.update_with_trade_update(fill_msg)
-        if not updated:
-            return
-        self.trigger_event(
-            MarketEvent.OrderFilled,
-            OrderFilledEvent(
-                self.current_timestamp,
-                tracked_order.client_order_id,
-                tracked_order.trading_pair,
-                tracked_order.trade_type,
-                tracked_order.order_type,
-                Decimal(str(fill_msg["price"])),
-                Decimal(str(fill_msg["quantity"])),
-                TradeFee(0.0, [(fill_msg["feeAsset"], Decimal(str(fill_msg["fee"])))]),
-                exchange_trade_id=fill_msg["orderId"]
+        for fill_msg in update_msg.get("F", "fills"):
+            updated = tracked_order.update_with_trade_update(fill_msg)
+            if not updated:
+                return
+            self.trigger_event(
+                MarketEvent.OrderFilled,
+                OrderFilledEvent(
+                    self.current_timestamp,
+                    tracked_order.client_order_id,
+                    tracked_order.trading_pair,
+                    tracked_order.trade_type,
+                    tracked_order.order_type,
+                    Decimal(str(fill_msg["price"])),
+                    Decimal(str(fill_msg["quantity"])),
+                    TradeFee(0.0, [(fill_msg["feeAsset"], Decimal(str(fill_msg["fee"])))]),
+                    exchange_trade_id=fill_msg["orderId"]
+                )
             )
-        )
         if math.isclose(tracked_order.executed_amount_base, tracked_order.amount) or \
                 tracked_order.executed_amount_base >= tracked_order.amount:
             tracked_order.last_state = "filled"
@@ -767,6 +767,10 @@ class IdexExchange(ExchangeBase):
                     # d	usdValue	string	Total value of the asset held by the wallet on the exchange in USD
                     self._account_balances[asset_name] = Decimal(str(event_data['q']))  # todo: q or d ?
                     self._account_available_balances[asset_name] = Decimal(str(event_data['f']))
+                elif event_type == 'error':
+                    self.logger().error(f"Unexpected error message received from api."
+                                        f"Code: {event_data['code']}"
+                                        f"message:{event_data['message']}", exc_info=True)
             except asyncio.CancelledError:
                 raise
             except Exception:
