@@ -187,61 +187,7 @@ class IdexExchange(ExchangeBase):
             self._user_stream_tracker_task.cancel()
         if self._user_stream_event_listener_task is not None:
             self._user_stream_event_listener_task.cancel()
-        # TODO: Implement if required
-        # if self._trading_rules_polling_task is not None:
-        #     self._trading_rules_polling_task.cancel()
         self._status_polling_task = self._user_stream_tracker_task = self._user_stream_event_listener_task = None
-
-    async def _trading_rules_polling_loop(self):
-        """
-        Periodically update trading rule.
-        """
-        while True:
-            try:
-                await self._update_trading_rules()
-                await asyncio.sleep(60)
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                self.logger().network(f"Unexpected error while fetching trading rules. Error: {str(e)}",
-                                      exc_info=True,
-                                      app_warning_msg="Could not fetch new trading rules from Idex. "
-                                                      "Check network connection.")
-                await asyncio.sleep(0.5)
-
-    async def _update_trading_rules(self):
-        exchange_info = await self.get_exchange_info()
-        self._trading_rules.clear()
-        self._trading_rules = self._format_trading_rules(exchange_info)
-
-    def _format_trading_rules(self, exchange_info: Dict[str, Any]) -> Dict[str, TradingRule]:
-        """
-        Converts json API response into a dictionary of trading rules.
-        :param instruments_info: The json API response
-        :return A dictionary of trading rules.
-        Response Example:
-        {
-            "timeZone": "UTC",
-            "serverTime": 1590408000000,
-            "ethereumDepositContractAddress": "0x...",
-            "ethUsdPrice": "206.46",
-            "gasPrice": 7,
-            "volume24hUsd": "10416227.98",
-            "makerFeeRate": "0.001",
-            "takerFeeRate": "0.002",
-            "makerTradeMinimum": "0.15000000",
-            "takerTradeMinimum": "0.05000000",
-            "withdrawalMinimum": "0.04000000"
-        }
-        """
-        result = {}
-        # Idex does not currently have rules specific to a trading pair. Instead, rules vary according to blockchain
-        # The only applicable rule at this time is the maker trade minimum of
-        TradingRule(trading_pair=get_idex_blockchain(), min_order_size=exchange_info[""]
-
-        except Exception:
-            self.logger().error(f"Error parsing the trading pair rule {rule}. Skipping.", exc_info=True)
-        return result
 
     @property
     def order_books(self) -> Dict[str, OrderBook]:
@@ -324,46 +270,7 @@ class IdexExchange(ExchangeBase):
                 app_warning_msg=f"Failed to cancel the order {order_id} on Idex. "
                                 f"Check API key and network connection.")
 
-    async def _api_request(self,
-                           http_method: str,
-                           path_url: str = "",
-                           data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-
-        """ A wrapper for submitting API requests to Idex. Returns json data from the endpoints """
-        """
-        rest_url = get_idex_rest_url()
-        url = f"{rest_url}{path_url}"
-        data_str = "" if data is None else json.dumps(data)
-        async with aiohttp.ClientSession() as session:
-            if http_method == "GET":
-                auth_dict = self._idex_auth.generate_auth_dict_for_get(url)
-                async with session.get(auth_dict["url"], headers=auth_dict["headers"]) as response:
-                    if response.status != 200:
-                        raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {data}")
-                    data = await response.json()
-                    return data
-            elif http_method == "POST" or "DELETE":
-                auth_dict = self._idex_auth.generate_auth_dict_for_post(
-                    url=url, body=data_str, wallet_signature=self._idex_auth.get_wallet_address())
-                # TODO Brian: adjust to wallet signature
-                async with session.get(auth_dict["url"], headers=auth_dict["headers"]) as response:
-                    data = await response.json()
-                    return data
-        """
-
 # API Calls
-
-    @staticmethod
-    async def get_exchange_info() -> List[Dict[str, Any]]:
-        """ Requests exchange info to apply IDEX trading rules when preparing orders """
-        rest_url = get_idex_rest_url()
-        url = f"{rest_url}/v1/exchange/"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                if response.status != 200:
-                    raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
-                data = await response.json()
-                return data
 
     async def get_orders(self) -> List[Dict[str, Any]]:
         """ Requests status of all active orders. Returns json data of all orders associated with wallet address """
@@ -443,7 +350,7 @@ class IdexExchange(ExchangeBase):
             "orderId": order_id
         }
 
-        signature_parameters = self._idex_auth.build_signature_params_for_order(
+        signature_parameters = self._idex_auth.build_signature_params_for_cancel_order(
             market=trading_pair,
             order_type=OrderTypeEnum[params["type"]],
         )
@@ -817,11 +724,11 @@ class IdexExchange(ExchangeBase):
 
         local_asset_names = set(self._account_balances.keys())
         remote_asset_names = set()
-        account_info = await self.get_balances_from_api()
-        for account in account_info:
-            asset_name = account["asset"]
-            self._account_available_balances[asset_name] = Decimal(str(account["availableForTrade"]))
-            self._account_balances[asset_name] = Decimal(str(account["quantity"]))
+        balance_info = await self.get_balances_from_api()
+        for balance in balance_info:
+            asset_name = balance["asset"]
+            self._account_available_balances[asset_name] = Decimal(str(balance["availableForTrade"]))
+            self._account_balances[asset_name] = Decimal(str(balance["quantity"]))
             remote_asset_names.add(asset_name)
 
         asset_names_to_remove = local_asset_names.difference(remote_asset_names)
