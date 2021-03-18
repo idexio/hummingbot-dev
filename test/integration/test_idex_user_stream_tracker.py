@@ -29,7 +29,7 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
     # order_book_tracker: Optional[IdexOrderBookTracker] = None
     IDEX_SECRET_KEY = "tkDey53dr1ZlyM2tzUAu82l+nhgzxCJl"
     IDEX_API_KEY = "889fe7dd-ea60-4bf4-86f8-4eec39146510"
-    IDEX_PRIVATE_KEY = "0227070369c04f55c66988ee3b272f8ae297cf7967ca7bad6d2f71f72072e18d"
+    IDEX_PRIVATE_KEY = ""  # compromised
 
     # IDEX_API_KEY = ""
     # IDEX_SECRET_KEY = ""
@@ -332,7 +332,7 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
         print("setup")
         IDEX_API_KEY = "tkDey53dr1ZlyM2tzUAu82l+nhgzxCJl"
         IDEX_SECRET_KEY = "889fe7dd-ea60-4bf4-86f8-4eec39146510"
-        IDEX_PRIVATE_KEY = "0227070369c04f55c66988ee3b272f8ae297cf7967ca7bad6d2f71f72072e18d"  # don't commit me please
+        IDEX_PRIVATE_KEY = ""  # don't commit me please
 
         cls.ev_loop: asyncio.BaseEventLoop = asyncio.get_event_loop()
         cls.user_stream_tracker: IdexUserStreamTracker = IdexUserStreamTracker(
@@ -360,10 +360,9 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
     def test_user_stream(self):
         print("streaming")
         # Wait process some msgs.
-        self.create_test_buy_dil_order()
-        self.ev_loop.run_until_complete(asyncio.sleep(10.0))
-        self.create_test_buy_dil_order()
-        print(self.user_stream_tracker.user_stream)
+        # self.ev_loop.run_until_complete(asyncio.sleep(10.0))
+        # self.create_test_buy_dil_order()
+        # print(self.user_stream_tracker.user_stream)
 
     def test_user_stream_manually(self):
         """
@@ -374,16 +373,11 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
         # print(self.user_stream_tracker.user_stream)
         print("Make an order then see if it shows up")
         print("goals: see if balances go through, create a second order, cancel an order")
-        self.test_user_stream()
+        # self.test_user_stream()
+        self.create_test_sell_dil_order()
         # self.test_user_balance_access()
-        print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-        print("-------------------------------------------------------")
-
         # self.create_test_buy_dil_order()
         # self.create_test_sell_dil_order()
-        # print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-        # print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-        # print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 
         # self.test_user_balance_access()
 
