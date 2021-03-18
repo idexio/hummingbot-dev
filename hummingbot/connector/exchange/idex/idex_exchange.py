@@ -757,9 +757,8 @@ class IdexExchange(ExchangeBase):
                 event_type, event_data = event_message['type'], event_message['data']
                 if event_type == 'orders':
                     self._process_order_message(event_data)
-                elif event_type == 'trades':
-                    # todo: do we need this. seems to provide public trades as opposed to user orders fills
-                    await self._process_trade_message(event_data)
+                # Do not need trades. Trade subscription removed from api_user_steam_data_source since it is
+                # a public subscription already used by api_order_book_data_source.
                 elif event_type == 'balances':
                     asset_name = event_data['a']
                     # q	quantity	string	Total quantity of the asset held by the wallet on the exchange
