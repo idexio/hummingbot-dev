@@ -90,12 +90,22 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
         for b_item in balances:
             self.assertIsInstance(b_item, dict)
             self.assertEqual(set(b_item.keys()), set(self.example_response_balances[0].keys()))
-            # [{'asset': 'ETH',
-            #   'availableForTrade': '0.16426417',
-            #   'locked': '0.00000000',
-            #   'quantity': '0.16426417',
-            #   'usdValue': '300.09'},
-            # print(b_item[1])
+
+    example_response_limit_order_partially_filled = {
+        "market": "ETH-USDC",
+        "orderId": "3a9ef9c0-a779-11ea-907d-23e999279287",
+        "clientOrderId": "199283",
+        "wallet": "0xA71C4aeeAabBBB8D2910F41C2ca3964b81F7310d",
+        "time": 1590394500000,
+        "status": "active",
+        "type": "stopLossLimit",
+        "side": "sell",
+        "originalQuantity": "4.95044603",
+        "executedQuantity": "0.00000000",
+        "cumulativeQuoteQuantity": "0.00000000",
+        "price": "190.00000000",
+        "stopPrice": "195.00000000"
+    }
 
     example_response_market_order_partially_filled = {
         'avgExecutionPrice': '0.10146579',
@@ -161,7 +171,7 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
             'market': 'DIL-ETH',
             'type': 0,  # enum value for market orders
             'side': 0,  # enum value for buy
-            'quoteOrderQuantity': '5.00000000',
+            'quoteOrderQuantity': '5.00000000',  # quoteOrderQuantity for market orders only
         }
 
         signature_parameters = (  # see idex doc: https://docs.idex.io/#associate-wallet
@@ -236,9 +246,10 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
             'nonce': self.idex_auth.get_nonce_str(),  # example: "9436afa0-9ee6-11ea-8a53-71994564322f",
             'wallet': self.idex_auth.get_wallet_address(),  # example: "0xA71C4aeeAabBBB8D2910F41C2ca3964b81F7310d"
             'market': 'DIL-ETH',
-            'type': 0,  # enum value for market orders
+            'type': 1,  # enum value for limit orders?
             'side': 1,  # enum value for sell
-            'quoteOrderQuantity': '5.00000000',
+            'quantity': '5.00000000',
+            "price": "1000000.00000000",
         }
 
         signature_parameters = (  # see idex doc: https://docs.idex.io/#associate-wallet
@@ -250,7 +261,7 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
             ('uint8', order['type']),  # 4 - Order type enum value
             ('uint8', order['side']),  # 5 - Order side enum value
 
-            ('string', order['quoteOrderQuantity']),  # 6 - Order quantity in base or quote terms
+            ('string', order['quantity']),  # 6 - Order quantity in base or quote terms
             ('bool', True),  # 7 - false if order quantity in base terms; true if order quantity in quote terms
             ('string', ''),  # 8 - Order price or empty string if market order
             ('string', ''),  # 9 - Order stop price or empty string if not a stop loss or take profit order
@@ -267,9 +278,10 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
                 'nonce': order['nonce'],  # example: "9436afa0-9ee6-11ea-8a53-71994564322f",
                 'wallet': order['wallet'],  # example: "0xA71C4aeeAabBBB8D2910F41C2ca3964b81F7310d"
                 "market": order['market'],
-                "type": "market",  # todo: declare enums
+                "type": "limit",  # todo: declare enums
                 "side": "sell",
-                "quoteOrderQuantity": order['quoteOrderQuantity']
+                "quantity": order['quantity'],
+                "price": "1000000.00000000",
             },
             'signature': wallet_signature,
         }
@@ -288,7 +300,7 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
         if status == 200:
             # check order was correctly placed (if partially filled you get status: cancelled)
             self.assertIsInstance(response, dict)
-            self.assertEqual(set(response.keys()), set(self.example_response_market_order_partially_filled))
+            self.assertEqual(set(response.keys()), set(self.example_response_limit_order_partially_filled))
             # note: curious behavior observed: even if account has insufficient funds, an order can sometimes be placed
             # and you get get response back which lacks fields: avgExecutionPrice and fills
         elif status == 402:  # HTTP 402: Payment Required. Error due to lack of funds
@@ -345,6 +357,13 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
         #                                         )
 
     # @unittest.skip
+    def test_user_stream(self):
+        print("streaming")
+        # Wait process some msgs.
+        self.create_test_buy_dil_order()
+        self.ev_loop.run_until_complete(asyncio.sleep(10.0))
+        self.create_test_buy_dil_order()
+        print(self.user_stream_tracker.user_stream)
 
     def test_user_stream_manually(self):
         """
@@ -355,18 +374,18 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
         # print(self.user_stream_tracker.user_stream)
         print("Make an order then see if it shows up")
         print("goals: see if balances go through, create a second order, cancel an order")
-        # cls.user_stream_tracker_task: asyncio.Task = safe_ensure_future(cls.user_stream_tracker.start())
-        self.test_user_balance_access()
+        self.test_user_stream()
+        # self.test_user_balance_access()
         print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++")
         print("-------------------------------------------------------")
 
         # self.create_test_buy_dil_order()
-        self.create_test_sell_dil_order()
-        print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-        print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-        print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+        # self.create_test_sell_dil_order()
+        # print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+        # print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+        # print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 
-        self.test_user_balance_access()
+        # self.test_user_balance_access()
 
 
 def main():
