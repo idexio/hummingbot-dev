@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Any, AsyncIterable
 
 # from async_timeout import timeout
 # import ujson
+from async_timeout import timeout
 from hummingbot.connector.exchange_base import ExchangeBase, s_decimal_NaN
 # from hummingbot.connector.in_flight_order_base import InFlightOrderBase
 # from hummingbot.core.data_type.cancellation_result import CancellationResult
@@ -19,6 +20,8 @@ from hummingbot.connector.trading_rule import TradingRule
 from hummingbot.core.clock import Clock
 from hummingbot.core.data_type.limit_order import LimitOrder
 from hummingbot.core.data_type.order_book import OrderBook
+
+from hummingbot.core.data_type.cancellation_result import CancellationResult
 from hummingbot.core.event.events import (
     OrderType, OrderCancelledEvent, TradeType, TradeFee, MarketEvent, BuyOrderCreatedEvent, SellOrderCreatedEvent,
     MarketOrderFailureEvent, BuyOrderCompletedEvent, SellOrderCompletedEvent, OrderFilledEvent
@@ -86,20 +89,16 @@ class IdexExchange(ExchangeBase):
         self._last_poll_timestamp = 0
 
     @property
+    def trading_rules(self) -> Dict[str, TradingRule]:
+        return self._trading_rules
+
+    @property
     def name(self) -> str:
         return EXCHANGE_NAME
 
     @property
     def order_books(self) -> Dict[str, OrderBook]:
         return self._order_book_tracker.order_books
-
-    @property
-    def trading_rules(self) -> Dict[str, TradingRule]:
-        return self._trading_rules
-
-    @property
-    def in_flight_orders(self) -> Dict[str, IdexInFlightOrder]:
-        return self._in_flight_orders
 
     @property
     def status_dict(self) -> Dict[str, bool]:
@@ -109,7 +108,7 @@ class IdexExchange(ExchangeBase):
         return {
             "order_books_initialized": self._order_book_tracker.ready,
             "account_balance": len(self._account_balances) > 0 if self._trading_required else True,
-            "trading_rule_initialized": len(self._trading_rules) > 0,
+            # "trading_rule_initialized": len(self._trading_rules) > 0, no trading rules applied at this time
             "user_stream_initialized":
                 self._user_stream_tracker.data_source.last_recv_time > 0 if self._trading_required else True,
         }
@@ -124,10 +123,15 @@ class IdexExchange(ExchangeBase):
 
     @property
     def limit_orders(self) -> List[LimitOrder]:
+        """ Returns a list of active limit orders being tracked """
         return [
             in_flight_order.to_limit_order()
             for in_flight_order in self._in_flight_orders.values()
         ]
+
+    @property
+    def in_flight_orders(self) -> Dict[str, IdexInFlightOrder]:
+        return self._in_flight_orders
 
     @property
     def tracking_states(self) -> Dict[str, any]:
@@ -171,6 +175,16 @@ class IdexExchange(ExchangeBase):
         """
         super().stop(clock)
 
+    @staticmethod
+    def get_order_price_quantum(trading_pair: str, price: Decimal) -> Decimal:
+        """ Provides the Idex standard minimum price increment across all trading pairs """
+        return Decimal(0.00000001)
+
+    @staticmethod
+    def get_order_size_quantum(trading_pair: str, order_size: Decimal) -> Decimal:
+        """ Provides the Idex standard minimum order increment across all trading pairs """
+        return Decimal(0.00000001)
+
     async def start_network(self):
         await self.stop_network()
         self._order_book_tracker.start()
@@ -190,14 +204,19 @@ class IdexExchange(ExchangeBase):
             self._user_stream_event_listener_task.cancel()
         self._status_polling_task = self._user_stream_tracker_task = self._user_stream_event_listener_task = None
 
-    async def get_active_exchange_markets(self) -> pd.DataFrame:
+    async def check_network(self) -> NetworkStatus:
         """
-        :return: data frame with trading_pair as index, and at least the following columns --
-                 ["baseAsset", "quoteAsset", "volume", "USDVolume"]
-        TODO: Validate that this method actually needed
-        TODO: How to get USDVolume
+        This function is required by NetworkIterator base class and is called periodically to check
+        the network connection. Simply ping the network (or call any light weight public API).
         """
-        pass
+        try:
+            # since there is no ping endpoint, the lowest rate call is to get BTC-USDT ticker
+            await self.get_ping()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            return NetworkStatus.NOT_CONNECTED
+        return NetworkStatus.CONNECTED
 
     def buy(self, trading_pair: str, amount: Decimal, order_type=OrderType.MARKET,
             price: Decimal = s_decimal_NaN, **kwargs) -> str:
@@ -269,6 +288,19 @@ class IdexExchange(ExchangeBase):
 
 # API Calls
 
+    @staticmethod
+    async def get_ping():
+        """ Requests status of all active orders. Returns json data of all orders associated with wallet address """
+
+        rest_url = get_idex_rest_url()
+        url = f"{rest_url}/v1/ping/"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
+                data = await response.json()
+        return data
+
     async def get_orders(self) -> List[Dict[str, Any]]:
         """ Requests status of all active orders. Returns json data of all orders associated with wallet address """
 
@@ -339,17 +371,19 @@ class IdexExchange(ExchangeBase):
                 return data
 
     async def delete_order(self, trading_pair: str, order_id: str):
+        # order_id is optional to allow the cancel_all method the ability to cancel all orders associated with a
+        # wallet at once by not providing the order_id
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/orders"
         params = {
             "nonce": self._idex_auth.generate_nonce(),
             "wallet": self._idex_auth.get_wallet_address(),
-            "orderId": order_id
+            "client": order_id
         }
 
         signature_parameters = self._idex_auth.build_signature_params_for_cancel_order(
+            client_order_id=order_id,
             market=trading_pair,
-            order_type=OrderTypeEnum[params["type"]],
         )
         wallet_signature = self._idex_auth.wallet_sign(signature_parameters)
 
@@ -403,16 +437,16 @@ class IdexExchange(ExchangeBase):
 
         if not order_type.is_limit_type():
             raise Exception(f"Unsupported order type: {order_type}")
-        trading_rule = self._trading_rules[trading_pair]  # TODO: Implement _trading_rules_polling_loop()
+        # trading_rule = self._trading_rules[trading_pair]  # No trading rules applied at this time
 
         idex_order_type = to_idex_order_type(order_type)
         idex_trade_type = to_idex_trade_type(trade_type)
 
         amount = self.quantize_order_amount(trading_pair, amount)
         price = self.quantize_order_price(trading_pair, price)
-        if amount < trading_rule.min_order_size:       # TODO: Implement _trading_rules_polling_loop()
-            raise ValueError(f"Buy order amount {amount} is lower than the minimum order size "
-                             f"{trading_rule.min_order_size}.")
+        # if amount < trading_rule.min_order_size:       # No trading rules applied at this time
+        #    raise ValueError(f"Buy order amount {amount} is lower than the minimum order size "
+        #                     f"{trading_rule.min_order_size}.")
 
         api_params = {
             "market": trading_pair,
@@ -463,12 +497,6 @@ class IdexExchange(ExchangeBase):
         self.trigger_event(MarketEvent.OrderFailure,
                            MarketOrderFailureEvent(self.current_timestamp, order_id, order_type))
 
-    def get_order_price_quantum(self, trading_pair: str, price: Decimal) -> Decimal:
-        return Decimal(0.00000001)
-
-    def get_order_size_quantum(self, trading_pair: str, order_size: Decimal) -> Decimal:
-        return Decimal(0.00000001)
-
     def start_tracking_order(self,
                              order_id: str,
                              exchange_order_id: str,
@@ -494,18 +522,6 @@ class IdexExchange(ExchangeBase):
         if trading_pair not in self._order_book_tracker.order_books:
             raise ValueError(f"No order book exists for '{trading_pair}'.")
         return self._order_book_tracker.order_books[trading_pair]
-
-    async def check_network(self) -> NetworkStatus:
-        try:
-            result = await self._client.public.get_ping()
-            # await result.text()
-            assert result == {}
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            self.logger().info(f"Failed network status check.... {e}")
-            return NetworkStatus.NOT_CONNECTED
-        return NetworkStatus.CONNECTED
 
     async def _status_polling_loop(self):
         """ Periodically update user balances and order status via REST API. Fallback measure for ws API updates. """
@@ -651,26 +667,32 @@ class IdexExchange(ExchangeBase):
         :returns List of CancellationResult which indicates whether each order is successfully cancelled.
         """
 
-        self.logger().info("CANCEL ALL")
-        nonce = None  # nonce = create_nonce()
-        walletBytes = self._idex_auth.get_wallet_bytes()
-        byteArray = [  # todo: deprecation warning
-            nonce.bytes,
-            IdexAuth.base16_to_binary(walletBytes),
-        ]
-        binary = IdexAuth.binary_concat_array(byteArray)  # todo: deprecation warning
-        hash = IdexAuth.hash(binary, 'keccak', 'hex')  # todo: deprecation warning
-        # todo: deprecation warning
-        signature = self._idex_auth.sign_message_string(hash, IdexAuth.binary_to_base16(self._idex_auth.new_wallet_object().key))
-        await self._client.trade.cancel_order(
-            parameters=RestRequestCancelAllOrders(
-                wallet=self._idex_auth.new_wallet_object().address,
-                nonce=str(nonce),
-            ),
-            signature=signature
-        )
+        incomplete_orders = [o for o in self._in_flight_orders.values() if not o.is_done]
+        tasks = [self.delete_order(o.trading_pair, o.client_order_id) for o in incomplete_orders]
+        order_id_set = set([o.client_order_id for o in incomplete_orders])
+        successful_cancellations = []
 
-        return []
+        try:
+            async with timeout(timeout_seconds):
+                results = await safe_gather(*tasks, return_exceptions=True)
+                for client_order_id in results:
+                    if type(client_order_id) is str:
+                        order_id_set.remove(client_order_id)
+                        successful_cancellations.append(CancellationResult(client_order_id, True))
+                    else:
+                        self.logger().warning(
+                            f"failed to cancel order with error: "
+                            f"{repr(client_order_id)}"
+                        )
+        except Exception as e:
+            self.logger().network(
+                f"Unexpected error cancelling orders.",
+                exc_info=True,
+                app_warning_msg="Failed to cancel order on Coinbase Pro. Check API key and network connection."
+            )
+
+        failed_cancellations = [CancellationResult(oid, False) for oid in order_id_set]
+        return successful_cancellations + failed_cancellations
 
     def tick(self, timestamp: float):
         """
