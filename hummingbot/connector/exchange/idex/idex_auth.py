@@ -309,7 +309,7 @@ class IdexAuth:
     def build_signature_params_for_cancel_order(
             self,
             market: str,
-            exchange_order_id: str = '',
+            client_order_id: str = '',
     ) -> Tuple[Tuple[str, Any], ...]:
         """
         Helper method to build the Solidity Keccay signature tuple necessary to cancel an order
@@ -321,7 +321,7 @@ class IdexAuth:
         signature_parameters = (
             ('uint128', self.get_nonce_int()),
             ('address', self.get_wallet_address()),
-            ('string', exchange_order_id),
+            ('string', client_order_id),
             ('string', market),
         )
         return signature_parameters

@@ -85,6 +85,50 @@ class IdexExchange(ExchangeBase):
         self._last_poll_timestamp = 0
 
     @property
+    def name(self) -> str:
+        return EXCHANGE_NAME
+
+    @property
+    def order_books(self) -> Dict[str, OrderBook]:
+        return self._order_book_tracker.order_books
+
+    @property
+    def trading_rules(self) -> Dict[str, TradingRule]:
+        return self._trading_rules
+
+    @property
+    def in_flight_orders(self) -> Dict[str, IdexInFlightOrder]:
+        return self._in_flight_orders
+
+    @property
+    def status_dict(self) -> Dict[str, bool]:
+        """
+        A dictionary of statuses of various connector's components.
+        """
+        return {
+            "order_books_initialized": self._order_book_tracker.ready,
+            "account_balance": len(self._account_balances) > 0 if self._trading_required else True,
+            "trading_rule_initialized": len(self._trading_rules) > 0,
+            "user_stream_initialized":
+                self._user_stream_tracker.data_source.last_recv_time > 0 if self._trading_required else True,
+        }
+
+    @property
+    def ready(self) -> bool:
+        """
+        :return True when all statuses pass, this might take 5-10 seconds for all the connector's components and
+        services to be ready.
+        """
+        return all(self.status_dict.values())
+
+    @property
+    def limit_orders(self) -> List[LimitOrder]:
+        return [
+            in_flight_order.to_limit_order()
+            for in_flight_order in self._in_flight_orders.values()
+        ]
+
+    @property
     def tracking_states(self) -> Dict[str, any]:
         """
         :return active in-flight orders in json format, is used to save in sqlite db.
@@ -95,6 +139,18 @@ class IdexExchange(ExchangeBase):
             if not value.is_done
         }
 
+    # TODO Brian: the from_json() function needs to be reworked in idex_in_flight_order
+    def restore_tracking_states(self, saved_states: Dict[str, any]):
+        """
+        Restore in-flight orders from saved tracking states, this is so the connector can pick up on where it left off
+        when it disconnects.
+        :param saved_states: The saved tracking_states.
+        """
+        self._in_flight_orders.update({
+            key: IdexInFlightOrder.from_json(value)
+            for key, value in saved_states.items()
+        })
+
     def supported_order_types(self) -> List[OrderType]:
         """
         :return a list of OrderType supported by this connector.
@@ -102,16 +158,95 @@ class IdexExchange(ExchangeBase):
         """
         return [OrderType.LIMIT, OrderType.LIMIT_MAKER]
 
+    def start(self, clock: Clock, timestamp: float):
+        """
+        This function is called automatically by the clock.
+        """
+        super().start(clock, timestamp)
+
+    def stop(self, clock: Clock):
+        """
+        This function is called automatically by the clock.
+        """
+        super().stop(clock)
+
+    async def start_network(self):
+        await self.stop_network()
+        self._order_book_tracker.start()
+        if self._trading_required:
+            self._status_polling_task = safe_ensure_future(self._status_polling_loop())
+            self._user_stream_tracker_task = safe_ensure_future(self._user_stream_tracker.start())
+            self._user_stream_event_listener_task = safe_ensure_future(self._user_stream_event_listener())
+
+    async def stop_network(self):
+        self._order_book_tracker.stop()
+
+        if self._status_polling_task is not None:
+            self._status_polling_task.cancel()
+        if self._user_stream_tracker_task is not None:
+            self._user_stream_tracker_task.cancel()
+        if self._user_stream_event_listener_task is not None:
+            self._user_stream_event_listener_task.cancel()
+        # TODO: Implement if required
+        # if self._trading_rules_polling_task is not None:
+        #     self._trading_rules_polling_task.cancel()
+        self._status_polling_task = self._user_stream_tracker_task = self._user_stream_event_listener_task = None
+
+    async def _trading_rules_polling_loop(self):
+        """
+        Periodically update trading rule.
+        """
+        while True:
+            try:
+                await self._update_trading_rules()
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                self.logger().network(f"Unexpected error while fetching trading rules. Error: {str(e)}",
+                                      exc_info=True,
+                                      app_warning_msg="Could not fetch new trading rules from Idex. "
+                                                      "Check network connection.")
+                await asyncio.sleep(0.5)
+
+    async def _update_trading_rules(self):
+        exchange_info = await self.get_exchange_info()
+        self._trading_rules.clear()
+        self._trading_rules = self._format_trading_rules(exchange_info)
+
+    def _format_trading_rules(self, instruments_info: Dict[str, Any]) -> Dict[str, TradingRule]:
+        """
+        Converts json API response into a dictionary of trading rules.
+        :param instruments_info: The json API response
+        :return A dictionary of trading rules.
+        Response Example:
+        {
+            "timeZone": "UTC",
+            "serverTime": 1590408000000,
+            "ethereumDepositContractAddress": "0x...",
+            "ethUsdPrice": "206.46",
+            "gasPrice": 7,
+            "volume24hUsd": "10416227.98",
+            "makerFeeRate": "0.001",
+            "takerFeeRate": "0.002",
+            "makerTradeMinimum": "0.15000000",
+            "takerTradeMinimum": "0.05000000",
+            "withdrawalMinimum": "0.04000000"
+        }
+        """
+        result = {}
+        # Idex does not currently have rules specific to a trading pair. Instead, rules vary according to blockchain
+        # The only applicable rule at this time is the maker trade minimum of
+        TradingRule(trading_pair=get_idex_blockchain(),
+                                               min_price_increment=price_step,
+                                               min_base_amount_increment=quantity_step)
+        except Exception:
+            self.logger().error(f"Error parsing the trading pair rule {rule}. Skipping.", exc_info=True)
+        return result
+
     @property
     def order_books(self) -> Dict[str, OrderBook]:
         return self._order_book_tracker.order_books
-
-    @property
-    def limit_orders(self) -> List[LimitOrder]:
-        return [
-            in_flight_order.to_limit_order()
-            for in_flight_order in self._in_flight_orders.values()
-        ]
 
     async def get_active_exchange_markets(self) -> pd.DataFrame:
         """
@@ -163,6 +298,7 @@ class IdexExchange(ExchangeBase):
         :param trading_pair: The market (e.g. BTC-USDT) of the order.
         :param order_id: The internal order id (also called client_order_id)
         """
+
         safe_ensure_future(self._execute_cancel(trading_pair, order_id))
         return order_id
 
@@ -178,10 +314,7 @@ class IdexExchange(ExchangeBase):
             tracked_order = self._in_flight_orders.get(order_id)
             if tracked_order is None:
                 raise ValueError(f"Failed to cancel order - {order_id}. Order not found.")
-            if tracked_order.exchange_order_id is None:
-                await tracked_order.get_exchange_order_id()
-            ex_order_id = tracked_order.exchange_order_id
-            await self.delete_order(trading_pair, ex_order_id)
+            await self.delete_order(trading_pair, order_id)
             return order_id
         except asyncio.CancelledError:
             raise
@@ -189,9 +322,8 @@ class IdexExchange(ExchangeBase):
             self.logger().network(
                 f"Failed to cancel order {order_id}: {str(e)}",
                 exc_info=True,
-                app_warning_msg=f"Failed to cancel the order {order_id} on CryptoCom. "
-                                f"Check API key and network connection."
-            )
+                app_warning_msg=f"Failed to cancel the order {order_id} on Idex. "
+                                f"Check API key and network connection.")
 
     async def _api_request(self,
                            http_method: str,
@@ -221,6 +353,18 @@ class IdexExchange(ExchangeBase):
         """
 
 # API Calls
+
+    @staticmethod
+    async def get_exchange_info() -> List[Dict[str, Any]]:
+        """ Requests exchange info to apply IDEX trading rules when preparing orders """
+        rest_url = get_idex_rest_url()
+        url = f"{rest_url}/v1/exchange/"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
+                data = await response.json()
+                return data
 
     async def get_orders(self) -> List[Dict[str, Any]]:
         """ Requests status of all active orders. Returns json data of all orders associated with wallet address """
@@ -291,13 +435,13 @@ class IdexExchange(ExchangeBase):
                 data = await response.json()
                 return data
 
-    async def delete_order(self, trading_pair: str, exchange_order_id: str):
+    async def delete_order(self, trading_pair: str, order_id: str):
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/orders"
         params = {
             "nonce": self._idex_auth.generate_nonce(),
             "wallet": self._idex_auth.get_wallet_address(),
-            "orderId": exchange_order_id
+            "orderId": order_id
         }
 
         signature_parameters = self._idex_auth.build_signature_params_for_order(
@@ -463,28 +607,6 @@ class IdexExchange(ExchangeBase):
             self.logger().info(f"Failed network status check.... {e}")
             return NetworkStatus.NOT_CONNECTED
         return NetworkStatus.CONNECTED
-
-    async def start_network(self):
-        await self.stop_network()
-        self._order_book_tracker.start()
-        if self._trading_required:
-            self._status_polling_task = safe_ensure_future(self._status_polling_loop())
-            self._user_stream_tracker_task = safe_ensure_future(self._user_stream_tracker.start())
-            self._user_stream_event_listener_task = safe_ensure_future(self._user_stream_event_listener())
-
-    async def stop_network(self):
-        self._order_book_tracker.stop()
-
-        if self._status_polling_task is not None:
-            self._status_polling_task.cancel()
-        if self._user_stream_tracker_task is not None:
-            self._user_stream_tracker_task.cancel()
-        if self._user_stream_event_listener_task is not None:
-            self._user_stream_event_listener_task.cancel()
-        # TODO: Implement
-        # if self._trading_rules_polling_task is not None:
-        #     self._trading_rules_polling_task.cancel()
-        self._status_polling_task = self._user_stream_tracker_task = self._user_stream_event_listener_task = None
 
     async def _status_polling_loop(self):
         """ Periodically update user balances and order status via REST API. Fallback measure for ws API updates. """
