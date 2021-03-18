@@ -214,7 +214,7 @@ class IdexExchange(ExchangeBase):
         self._trading_rules.clear()
         self._trading_rules = self._format_trading_rules(exchange_info)
 
-    def _format_trading_rules(self, instruments_info: Dict[str, Any]) -> Dict[str, TradingRule]:
+    def _format_trading_rules(self, exchange_info: Dict[str, Any]) -> Dict[str, TradingRule]:
         """
         Converts json API response into a dictionary of trading rules.
         :param instruments_info: The json API response
@@ -237,9 +237,8 @@ class IdexExchange(ExchangeBase):
         result = {}
         # Idex does not currently have rules specific to a trading pair. Instead, rules vary according to blockchain
         # The only applicable rule at this time is the maker trade minimum of
-        TradingRule(trading_pair=get_idex_blockchain(),
-                                               min_price_increment=price_step,
-                                               min_base_amount_increment=quantity_step)
+        TradingRule(trading_pair=get_idex_blockchain(), min_order_size=exchange_info[""]
+
         except Exception:
             self.logger().error(f"Error parsing the trading pair rule {rule}. Skipping.", exc_info=True)
         return result
@@ -472,7 +471,6 @@ class IdexExchange(ExchangeBase):
         params = {
             "nonce": self._idex_auth.get_nonce_str(),
             "wallet": self._idex_auth.get_wallet_address(),
-            "asset": self._trading_pairs
         }
         auth_dict = self._idex_auth.generate_auth_dict(http_method="GET", url=url, params=params)
         async with aiohttp.ClientSession() as session:
