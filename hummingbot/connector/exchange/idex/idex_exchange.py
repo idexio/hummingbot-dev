@@ -246,7 +246,7 @@ class IdexExchange(ExchangeBase):
         :param price: The price (note: this is no longer optional)
         :returns A new internal order id
         """
-        order_id: str = get_new_client_order_id(False, trading_pair)
+        order_id: str = get_new_client_order_id(False, trading_pair) #TODO: get client order id
         safe_ensure_future(self._create_order(TradeType.SELL, order_id, trading_pair, amount, order_type, price))
         return order_id
 
@@ -273,8 +273,8 @@ class IdexExchange(ExchangeBase):
             tracked_order = self._in_flight_orders.get(order_id)
             if tracked_order is None:
                 raise ValueError(f"Failed to cancel order - {order_id}. Order not found.")
-            await self.delete_order(trading_pair, order_id)
-            return order_id
+            order_cancellation = await self.delete_order(trading_pair, order_id)
+            return order_id # TODO: get cancel return json
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -288,7 +288,7 @@ class IdexExchange(ExchangeBase):
 
     @staticmethod
     async def get_ping():
-        """ Requests status of all active orders. Returns json data of all orders associated with wallet address """
+        """ Requests status of current connection. """
 
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/ping/"
@@ -576,7 +576,7 @@ class IdexExchange(ExchangeBase):
                 if isinstance(update_result, Exception):
                     raise update_result
                 for fill_msg in update_result["fills"]:
-                    await self._process_fill_message(fill_msg)
+                    await self._process_fill_message(fill_msg, )
                 self._process_order_message(update_result)
 
     def _process_order_message(self, order_msg: Dict[str, Any]):
@@ -609,7 +609,7 @@ class IdexExchange(ExchangeBase):
                                ))
             self.stop_tracking_order(client_order_id)
 
-    async def _process_trade_message(self, fill_msg: Dict[str, Any]):
+    async def _process_fill_message(self, fill_msg: Dict[str, Any]):
         """
         Updates in-flight order and trigger order filled event for trade message received. Triggers order completed
         event if the total executed amount equals to the specified order amount.
@@ -756,6 +756,7 @@ class IdexExchange(ExchangeBase):
                     continue
                 event_type, event_data = event_message['type'], event_message['data']
                 if event_type == 'orders':
+                    self._process_fill_message(event_data)
                     self._process_order_message(event_data)
                 # Do not need trades. Trade subscription removed from api_user_steam_data_source since it is
                 # a public subscription already used by api_order_book_data_source.
