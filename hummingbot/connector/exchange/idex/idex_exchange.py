@@ -4,8 +4,6 @@ import time
 import asyncio
 import aiohttp
 
-import pandas as pd
-
 # from dataclasses import asdict
 from decimal import Decimal
 from typing import Optional, List, Dict, Any, AsyncIterable
@@ -41,7 +39,7 @@ from hummingbot.connector.exchange.idex.idex_user_stream_tracker import IdexUser
 from hummingbot.connector.exchange.idex.idex_utils import (
     get_idex_rest_url, to_idex_order_type, to_idex_trade_type, EXCHANGE_NAME, get_new_client_order_id, DEBUG
 )
-from hummingbot.connector.exchange.idex.types.rest.request import RestRequestCancelAllOrders
+# from hummingbot.connector.exchange.idex.types.rest.request import RestRequestCancelAllOrders
 
 
 s_decimal_0 = Decimal("0.0")
@@ -686,7 +684,7 @@ class IdexExchange(ExchangeBase):
                             f"failed to cancel order with error: "
                             f"{repr(client_order_id)}"
                         )
-        except Exception as e:
+        except Exception:
             self.logger().network(
                 f"Unexpected error cancelling orders.",
                 exc_info=True,
