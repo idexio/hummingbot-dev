@@ -1,4 +1,4 @@
-import json
+# import json
 import math
 import time
 import asyncio
@@ -6,12 +6,12 @@ import aiohttp
 
 import pandas as pd
 
-from dataclasses import asdict
+# from dataclasses import asdict
 from decimal import Decimal
 from typing import Optional, List, Dict, Any, AsyncIterable
 
 # from async_timeout import timeout
-import ujson
+# import ujson
 from hummingbot.connector.exchange_base import ExchangeBase, s_decimal_NaN
 from hummingbot.connector.in_flight_order_base import InFlightOrderBase
 # from hummingbot.core.data_type.cancellation_result import CancellationResult
@@ -24,20 +24,18 @@ from hummingbot.core.network_iterator import NetworkStatus
 from hummingbot.core.utils.async_utils import safe_ensure_future, safe_gather
 from hummingbot.core.utils.estimate_fee import estimate_fee
 
-from .types.enums import OrderStatus
+# from .types.enums import OrderStatus
 
-from .client.exceptions import ResourceNotFoundError
+# from .client.exceptions import ResourceNotFoundError
 
 from .client.asyncio import AsyncIdexClient
-from .idex_auth import IdexAuth, OrderTypeEnum, OrderSideEnum, OrderTimeInForce, OrderSelfTradePreventionEnum
+from .idex_auth import IdexAuth, OrderTypeEnum
 from .idex_in_flight_order import IdexInFlightOrder
 from .idex_order_book_tracker import IdexOrderBookTracker
 from .idex_user_stream_tracker import IdexUserStreamTracker
-from .idex_utils import get_idex_rest_url, get_idex_ws_feed, to_idex_order_type, from_idex_order_type, \
-    from_idex_trade_type, to_idex_trade_type, EXCHANGE_NAME
-from .types.rest.request import RestRequestCancelOrder, RestRequestCancelAllOrders, RestRequestOrder, OrderSide
-from .types.websocket.response import WebSocketResponseTradeShort, \
-    WebSocketResponseOrderShort
+from .idex_utils import get_idex_rest_url, to_idex_order_type, to_idex_trade_type, EXCHANGE_NAME, DEBUG
+from .types.rest.request import RestRequestCancelOrder, RestRequestCancelAllOrders  # todo: deprecated
+
 
 s_decimal_0 = Decimal("0.0")
 
@@ -163,7 +161,7 @@ class IdexExchange(ExchangeBase):
 
     def buy(self, trading_pair: str, amount: Decimal, order_type=OrderType.MARKET, price: Decimal = s_decimal_NaN,
             **kwargs):
-        order_id = create_id()
+        order_id = None  # order_id = create_id()
         safe_ensure_future(self._create_order(
             "buy",
             order_id,
@@ -180,7 +178,7 @@ class IdexExchange(ExchangeBase):
 
     def sell(self, trading_pair: str, amount: Decimal, order_type=OrderType.MARKET, price: Decimal = s_decimal_NaN,
              **kwargs):
-        order_id = create_id()
+        order_id = None  # order_id = create_id()
         safe_ensure_future(self._create_order(
             "sell",
             order_id,
@@ -263,15 +261,15 @@ class IdexExchange(ExchangeBase):
             "wallet": self._idex_auth.get_wallet_address()
         })
         signature_parameters = self._idex_auth.build_signature_params_for_order(
-                            # TODO Brian: Did not include: stop_price, time_in_force, and selftrade_prevention. Add later as required.
-                            market=params["market"],
-                            order_type=OrderTypeEnum[params["type"]],
-                            order_side=OrderTypeEnum[params["side"]],
-                            order_quantity=params["quantity"],
-                            # I believe this will always be false as the order quantity need only be taken in base terms
-                            quantity_in_quote=False,
-                            price=params["price"],
-                            client_order_id=params["clientOrderId"],
+            # TODO Brian: Did not include: stop_price, time_in_force, and selftrade_prevention. Add later as required.
+            market=params["market"],
+            order_type=OrderTypeEnum[params["type"]],
+            order_side=OrderTypeEnum[params["side"]],
+            order_quantity=params["quantity"],
+            # I believe this will always be false as the order quantity need only be taken in base terms
+            quantity_in_quote=False,
+            price=params["price"],
+            client_order_id=params["clientOrderId"],
         )
         wallet_signature = self._idex_auth.wallet_sign(signature_parameters)
 
@@ -338,13 +336,13 @@ class IdexExchange(ExchangeBase):
                              f"{trading_rule.min_order_size}.")
 
         api_params = {
-                      "market": trading_pair,
-                      "type": idex_order_type,
-                      "side": idex_trade_type,
-                      "quantity": f"{amount:f}",
-                      "price": f"{price:f}",
-                      "clientOrderId": order_id
-                      }
+            "market": trading_pair,
+            "type": idex_order_type,
+            "side": idex_trade_type,
+            "quantity": f"{amount:f}",
+            "price": f"{price:f}",
+            "clientOrderId": order_id
+        }
         self.start_tracking_order(order_id,
                                   None,
                                   trading_pair,
@@ -354,7 +352,8 @@ class IdexExchange(ExchangeBase):
                                   order_type
                                   )
         try:
-            order_result = await self.post_order(api_params) #TODO: ID required params for post_order and create post_order()
+            # TODO: ID required params for post_order and create post_order()
+            order_result = await self.post_order(api_params)
             exchange_order_id = order_result["orderId"]
             tracked_order = self._in_flight_orders.get(order_id)
             if tracked_order is not None:
@@ -418,7 +417,7 @@ class IdexExchange(ExchangeBase):
 
     async def _cancel_order(self, trading_pair: str, client_order_id: str):
         # market = await to_idex_pair(trading_pair)
-        nonce = create_nonce()
+        nonce = None  # nonce = create_nonce()
         walletBytes = self._idex_auth.get_wallet_bytes()
         byteArray = [
             nonce.bytes,
@@ -588,7 +587,7 @@ class IdexExchange(ExchangeBase):
             self.stop_tracking_order(client_order_id)
         elif tracked_order.is_failure:
             self.logger().info(f"The market order {client_order_id} has failed according to order status API. "
-                               f"Reason: {order_msg['message']}") # TODO: confirm message returned from order fail
+                               f"Reason: {order_msg['message']}")  # TODO: confirm message returned from order fail
             self.trigger_event(MarketEvent.OrderFailure,
                                MarketOrderFailureEvent(
                                    self.current_timestamp,
@@ -656,7 +655,7 @@ class IdexExchange(ExchangeBase):
         """
 
         self.logger().info("CANCEL ALL")
-        nonce = create_nonce()
+        nonce = None  # nonce = create_nonce()
         walletBytes = self._idex_auth.get_wallet_bytes()
         byteArray = [  # todo: deprecation warning
             nonce.bytes,
@@ -720,7 +719,8 @@ class IdexExchange(ExchangeBase):
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                print(f"_iter_user_event_queue Error: {e}")
+                if DEBUG:
+                    print(f"_iter_user_event_queue Error: {e}")
                 self.logger().network(
                     "Unknown error. Retrying after 1 seconds.",
                     exc_info=True,
@@ -730,40 +730,30 @@ class IdexExchange(ExchangeBase):
 
     async def _user_stream_event_listener(self):
         """
-        TODO: implement trade absorb
+        Listens to message in _user_stream_tracker.user_stream queue. The messages are put in by
+        IdexAPIUserStreamDataSource.
         """
-        async for event in self._iter_user_event_queue():
-            if not isinstance(event, (
-                    # WebSocketResponseL2OrderBookShort,
-                    WebSocketResponseTradeShort,
-                    # WebSocketResponseBalanceShort,
-                    # WebSocketResponseL1OrderBookShort,
-                    WebSocketResponseOrderShort)):
-                continue
-
-            print(f"USER WS EVENT: {event}")
-
-            # TODO
-            """
-            if isinstance(event, WebSocketResponseBalanceShort):
-                self._account_balances[event.w][event.a] = Decimal(str(event.q))
-                self._account_available_balances[event.w][event.a] = Decimal(str(event.f))
-            """
-            if isinstance(event, WebSocketResponseOrderShort):
-                self._process_order_message(event.c, event.X)
-
-            # try:
-            #     if "result" not in event_message or "channel" not in event_message["result"]:
-            #         continue
-            #     channel = event_message["result"]["channel"]
-            #     if "user.trade" in channel:
-            #         for trade_msg in event_message["result"]["data"]:
-            #             await self._process_trade_message(trade_msg)
-            #     elif "user.order" in channel:
-            #         for order_msg in event_message["result"]["data"]:
-            #             self._process_order_message(order_msg)
-            # except asyncio.CancelledError:
-            #     raise
-            # except Exception:
-            #     self.logger().error("Unexpected error in user stream listener loop.", exc_info=True)
-            #     await asyncio.sleep(5.0)
+        async for event_message in self._iter_user_event_queue():
+            try:
+                if 'type' not in event_message or 'data' not in event_message:
+                    if DEBUG:
+                        self.logger().debug('unknown event received:', event_message)
+                    continue
+                event_type, event_data = event_message['type'], event_message['data']
+                if event_type == 'orders':
+                    self._process_order_message(event_data)
+                elif event_type == 'trades':
+                    # todo: do we need this. seems to provide public trades as opposed to user orders fills
+                    await self._process_trade_message(event_data)
+                elif event_type == 'balances':
+                    asset_name = event_data['a']
+                    # q	quantity	string	Total quantity of the asset held by the wallet on the exchange
+                    # f	availableForTrade	string	Quantity of the asset available for trading; quantity - locked
+                    # d	usdValue	string	Total value of the asset held by the wallet on the exchange in USD
+                    self._account_balances[asset_name] = Decimal(str(event_data['q']))  # todo: q or d ?
+                    self._account_available_balances[asset_name] = Decimal(str(event_data['f']))
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self.logger().error("Unexpected error in user stream listener loop.", exc_info=True)
+                await asyncio.sleep(5.0)
