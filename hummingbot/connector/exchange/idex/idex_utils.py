@@ -35,7 +35,7 @@ _IDEX_REST_URL_SANDBOX_BSC = "https://api-sandbox-bsc.idex.io"
 _IDEX_REST_URL_PROD_ETH = "https://api-eth.idex.io"
 _IDEX_REST_URL_PROD_BSC = "https://api-bsc.idex.io"
 
-_IDEX_WS_FEED_SANDBOX_ETH = "wss://websocket-sandbox-eth.idex.io/v1"
+_IDEX_WS_FEED_SANDBOX_ETH = "https://api-sandbox-eth.idex.io"
 _IDEX_WS_FEED_SANDBOX_BSC = "wss://websocket-sandbox-bsc.idex.io/v1"
 _IDEX_WS_FEED_PROD_ETH = "wss://websocket-eth.idex.io/v1"
 _IDEX_WS_FEED_PROD_BSC = "wss://websocket-bsc.idex.io/v1"
