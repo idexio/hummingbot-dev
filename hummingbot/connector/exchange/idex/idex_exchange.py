@@ -4,21 +4,16 @@ import time
 import asyncio
 import aiohttp
 
-# from dataclasses import asdict
+
 from decimal import Decimal
 from typing import Optional, List, Dict, Any, AsyncIterable
-
-# from async_timeout import timeout
-# import ujson
 from async_timeout import timeout
+
 from hummingbot.connector.exchange_base import ExchangeBase, s_decimal_NaN
-# from hummingbot.connector.in_flight_order_base import InFlightOrderBase
-# from hummingbot.core.data_type.cancellation_result import CancellationResult
 from hummingbot.connector.trading_rule import TradingRule
 from hummingbot.core.clock import Clock
 from hummingbot.core.data_type.limit_order import LimitOrder
 from hummingbot.core.data_type.order_book import OrderBook
-
 from hummingbot.core.data_type.cancellation_result import CancellationResult
 from hummingbot.core.event.events import (
     OrderType, OrderCancelledEvent, TradeType, TradeFee, MarketEvent, BuyOrderCreatedEvent, SellOrderCreatedEvent,
@@ -28,9 +23,6 @@ from hummingbot.core.network_iterator import NetworkStatus
 from hummingbot.core.utils.async_utils import safe_ensure_future, safe_gather
 from hummingbot.core.utils.estimate_fee import estimate_fee
 
-# from hummingbot.connector.exchange.idex.types.enums import OrderStatus
-# from hummingbot.connector.exchange.idex.client.exceptions import ResourceNotFoundError
-
 from hummingbot.connector.exchange.idex.client.asyncio import AsyncIdexClient
 from hummingbot.connector.exchange.idex.idex_auth import IdexAuth, OrderTypeEnum
 from hummingbot.connector.exchange.idex.idex_in_flight_order import IdexInFlightOrder
@@ -39,8 +31,6 @@ from hummingbot.connector.exchange.idex.idex_user_stream_tracker import IdexUser
 from hummingbot.connector.exchange.idex.idex_utils import (
     get_idex_rest_url, to_idex_order_type, to_idex_trade_type, EXCHANGE_NAME, get_new_client_order_id, DEBUG
 )
-# from hummingbot.connector.exchange.idex.types.rest.request import RestRequestCancelAllOrders
-
 
 s_decimal_0 = Decimal("0.0")
 
