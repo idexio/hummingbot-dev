@@ -92,19 +92,19 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
             self.assertEqual(set(b_item.keys()), set(self.example_response_balances[0].keys()))
 
     example_response_limit_order_partially_filled = {
-        "market": "ETH-USDC",
-        "orderId": "3a9ef9c0-a779-11ea-907d-23e999279287",
-        "clientOrderId": "199283",
-        "wallet": "0xA71C4aeeAabBBB8D2910F41C2ca3964b81F7310d",
-        "time": 1590394500000,
-        "status": "active",
-        "type": "stopLossLimit",
-        "side": "sell",
-        "originalQuantity": "4.95044603",
-        "executedQuantity": "0.00000000",
-        "cumulativeQuoteQuantity": "0.00000000",
-        "price": "190.00000000",
-        "stopPrice": "195.00000000"
+        'cumulativeQuoteQuantity': '0.00000000',
+        'executedQuantity': '0.00000000',
+        'market': 'DIL-ETH',
+        'orderId': 'b0b8c3a0-88bc-11eb-8929-772a825d8ec1',
+        'originalQuantity': '5.00000000',
+        'price': '1000.00000000',
+        'selfTradePrevention': 'dc',
+        'side': 'sell',
+        'status': 'open',
+        'time': 1616162956507,
+        'timeInForce': 'gtc',
+        'type': 'limit',
+        'wallet': '0x96525939c7cA0D73aDe68B54510970B97CA020c9'
     }
 
     example_response_market_order_partially_filled = {
@@ -231,7 +231,7 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
     #     else:
     #         self.assertEqual(status, 200, msg=f'Unexpected error when creating order. Response: {response}')
 
-    def create_test_sell_dil_order(self):
+    def create_test_sell_dil_order_limit(self):
         """
         Test is used to create a sell order for DIL, therefore buying ETH
         Tests create order to check trade level authentication (HMAC Header + ETH Wallet signature)
@@ -246,10 +246,11 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
             'nonce': self.idex_auth.get_nonce_str(),  # example: "9436afa0-9ee6-11ea-8a53-71994564322f",
             'wallet': self.idex_auth.get_wallet_address(),  # example: "0xA71C4aeeAabBBB8D2910F41C2ca3964b81F7310d"
             'market': 'DIL-ETH',
-            'type': 1,  # enum value for limit orders?
+            'type': 1,  # enum value for mkt
             'side': 1,  # enum value for sell
             'quantity': '5.00000000',
-            "price": "1000000.00000000",
+            'price': '1000.00000000',
+            # "stopPrice": "10095.00000000"
         }
 
         signature_parameters = (  # see idex doc: https://docs.idex.io/#associate-wallet
@@ -262,17 +263,17 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
             ('uint8', order['side']),  # 5 - Order side enum value
 
             ('string', order['quantity']),  # 6 - Order quantity in base or quote terms
-            ('string', order['price']),  # ? - Price, as a str
-
-            ('bool', True),  # 7 - false if order quantity in base terms; true if order quantity in quote terms
-            ('string', ''),  # 8 - Order price or empty string if market order
-            ('string', ''),  # 9 - Order stop price or empty string if not a stop loss or take profit order
+            ('bool', False),  # 7 - false if order quantity in base terms; true if order quantity in quote terms
+            ('string', order['price']),  # 8 - Order price or empty string if market order
+            ('string', ''),  # 9 - Order stop price or empty string if not a stop loss or take profit order order['stopPrice']
 
             ('string', ''),  # 10 - Client order id or empty string
             ('uint8', 0),  # 11 - Order time in force enum value
             ('uint8', 0),  # 12 - Order self-trade prevention enum value
             ('uint64', 0),  # 13 - Unused, always should be 0
         )
+
+        # TODO: elliott-- wallet sig is consistently invalid for anything but market order..
         wallet_signature = self.idex_auth.wallet_sign(signature_parameters)
 
         payload = {
@@ -284,6 +285,7 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
                 "side": "sell",
                 "quantity": order['quantity'],
                 "price": order['price'],
+                # "stopPrice": order['stopPrice'],
             },
             'signature': wallet_signature,
         }
@@ -362,9 +364,11 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
     def test_user_stream(self):
         print("streaming")
         # Wait process some msgs.
-        # self.ev_loop.run_until_complete(asyncio.sleep(10.0))
-        # self.create_test_buy_dil_order()
+        self.ev_loop.run_until_complete(asyncio.sleep(10.0))
+        self.create_test_sell_dil_order_limit()
+        # print("-----------------------------------------")
         # print(self.user_stream_tracker.user_stream)
+        # print("-----------------------------------------")
 
     def test_user_stream_manually(self):
         """
@@ -373,13 +377,13 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
         """
         # self.ev_loop.run_until_complete(asyncio.sleep(10.0))
         # print(self.user_stream_tracker.user_stream)
-        print("Make an order then see if it shows up")
-        print("goals: see if balances go through, create a second order, cancel an order")
+        # print("Make an order then see if it shows up")
+        # print("goals: see if balances go through, create a second order, cancel an order")
         # self.test_user_stream()
-        self.create_test_sell_dil_order()
+        # self.create_test_sell_dil_order_limit()
         # self.test_user_balance_access()
         # self.create_test_buy_dil_order()
-        # self.create_test_sell_dil_order()
+        # self.create_test_sell_dil_order_limit()
 
         # self.test_user_balance_access()
 
