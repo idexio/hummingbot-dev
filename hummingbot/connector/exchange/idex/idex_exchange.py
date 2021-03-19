@@ -208,7 +208,6 @@ class IdexExchange(ExchangeBase):
         the network connection. Simply ping the network (or call any light weight public API).
         """
         try:
-            # since there is no ping endpoint, the lowest rate call is to get BTC-USDT ticker
             await self.get_ping()
         except asyncio.CancelledError:
             raise
@@ -296,8 +295,7 @@ class IdexExchange(ExchangeBase):
             async with session.get(url) as response:
                 if response.status != 200:
                     raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
-                data = await response.json()
-        return data
+        return
 
     async def get_orders(self) -> List[Dict[str, Any]]:
         """ Requests status of all active orders. Returns json data of all orders associated with wallet address """
