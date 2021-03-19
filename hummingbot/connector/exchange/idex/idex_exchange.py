@@ -374,10 +374,11 @@ class IdexExchange(ExchangeBase):
         params = {
             "nonce": self._idex_auth.generate_nonce(),
             "wallet": self._idex_auth.get_wallet_address(),
-            "client": order_id
+            "orderId": f"client:{order_id}"
         }
 
         signature_parameters = self._idex_auth.build_signature_params_for_cancel_order(
+            # potential value: client_order_id=f"client:{order_id}"
             client_order_id=order_id,
             market=trading_pair,
         )
@@ -581,12 +582,12 @@ class IdexExchange(ExchangeBase):
         Updates in-flight order and triggers cancellation or failure event if needed.
         :param order_msg: The order response from either REST or web socket API (they are of the same format)
         """
-        client_order_id = order_msg.get("c", "clientOrderId")
+        client_order_id = order_msg["c"] if ["c"] in order_msg else order_msg.get("clientOrderId")
         if client_order_id not in self._in_flight_orders:
             return
         tracked_order = self._in_flight_orders[client_order_id]
         # Update order execution status
-        tracked_order.last_state = order_msg.get("X", "status")
+        tracked_order.last_state = order_msg["X"] if ["X"] in order_msg else order_msg.get("status")
         if tracked_order.is_cancelled:
             self.logger().info(f"Successfully cancelled order {client_order_id}.")
             self.trigger_event(MarketEvent.OrderCancelled,
@@ -610,14 +611,14 @@ class IdexExchange(ExchangeBase):
         Updates in-flight order and trigger order filled event for trade message received. Triggers order completed
         event if the total executed amount equals to the specified order amount.
         """
-        for order in self._in_flight_orders.values():
-            await order.get_exchange_order_id()
-        track_order = [o for o in self._in_flight_orders.values()
-                       if update_msg.get("i", "orderId") == o.exchange_order_id]
+
+        client_order_id = update_msg["c"] if "c" in update_msg else update_msg.get("clientOrderId")
+        # I think this should address that cumbersome dictionary iteration
+        track_order = self._in_flight_orders.get(client_order_id)
         if not track_order:
             return
-        tracked_order = track_order[0]
-        for fill_msg in update_msg.get("F", "fills"):
+        tracked_order = track_order[0]  # Not sure if this line is necessary. I don't know why crypto.com included it. track_order should be an object.
+        for fill_msg in update_msg["F"] if "F" in update_msg else update_msg.get("fills"):
             updated = tracked_order.update_with_trade_update(fill_msg)
             if not updated:
                 return
