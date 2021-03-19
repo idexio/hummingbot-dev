@@ -322,6 +322,8 @@ class IdexExchange(ExchangeBase):
                 return data
 
     async def post_order(self, params) -> Dict[str, Any]:
+        """ Posts an order request to the Idex API. Returns json data with order details """
+
 
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/orders"
@@ -357,8 +359,11 @@ class IdexExchange(ExchangeBase):
                 return data
 
     async def delete_order(self, trading_pair: str, order_id: str):
-        # order_id is optional to allow the cancel_all method the ability to cancel all orders associated with a
-        # wallet at once by not providing the order_id
+        """
+        Deletes an order or all orders associated with a wallet from the Idex API.
+        Returns json data with order id confirming deletion
+        """
+
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/orders"
         params = {
@@ -604,10 +609,9 @@ class IdexExchange(ExchangeBase):
 
         client_order_id = update_msg["c"] if "c" in update_msg else update_msg.get("clientOrderId")
         # I think this should address that cumbersome dictionary iteration
-        track_order = self._in_flight_orders.get(client_order_id)
-        if not track_order:
+        tracked_order = self._in_flight_orders.get(client_order_id)
+        if not tracked_order:
             return
-        tracked_order = track_order[0]  # Not sure if this line is necessary. I don't know why crypto.com included it. track_order should be an object.
         for fill_msg in update_msg["F"] if "F" in update_msg else update_msg.get("fills"):
             updated = tracked_order.update_with_trade_update(fill_msg)
             if not updated:
