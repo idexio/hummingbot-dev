@@ -481,8 +481,8 @@ class IdexExchange(ExchangeBase):
                 exc_info=True,
                 app_warning_msg=str(e)
             )
-        self.trigger_event(MarketEvent.OrderFailure,
-                           MarketOrderFailureEvent(self.current_timestamp, order_id, order_type))
+            self.trigger_event(MarketEvent.OrderFailure, MarketOrderFailureEvent(
+                self.current_timestamp, order_id, order_type))
 
     def start_tracking_order(self,
                              order_id: str,
@@ -496,7 +496,7 @@ class IdexExchange(ExchangeBase):
         Starts tracking an order by simply adding it into _in_flight_orders dictionary.
         """
         self._in_flight_orders[order_id] = IdexInFlightOrder(
-            order_id=order_id,
+            client_order_id=order_id,
             exchange_order_id=exchange_order_id,
             trading_pair=trading_pair,
             order_type=order_type,
@@ -677,7 +677,7 @@ class IdexExchange(ExchangeBase):
             self.logger().network(
                 f"Unexpected error cancelling orders.",
                 exc_info=True,
-                app_warning_msg="Failed to cancel order on Coinbase Pro. Check API key and network connection."
+                app_warning_msg="Failed to cancel order on Idex. Check API key and network connection."
             )
 
         failed_cancellations = [CancellationResult(oid, False) for oid in order_id_set]
