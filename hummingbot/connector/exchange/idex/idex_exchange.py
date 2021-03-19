@@ -444,7 +444,7 @@ class IdexExchange(ExchangeBase):
             "clientOrderId": order_id
         }
         self.start_tracking_order(order_id,
-                                  None,
+                                  None, # TODO Brian: fix this type - str type not None (make optional)
                                   trading_pair,
                                   trade_type,
                                   price,
