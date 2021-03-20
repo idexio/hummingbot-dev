@@ -28,8 +28,9 @@ from hummingbot.connector.exchange.idex.idex_in_flight_order import IdexInFlight
 from hummingbot.connector.exchange.idex.idex_order_book_tracker import IdexOrderBookTracker
 from hummingbot.connector.exchange.idex.idex_user_stream_tracker import IdexUserStreamTracker
 from hummingbot.connector.exchange.idex.idex_utils import (
-    get_idex_rest_url, to_idex_order_type, to_idex_trade_type, EXCHANGE_NAME, get_new_client_order_id, DEBUG
+    to_idex_order_type, to_idex_trade_type, EXCHANGE_NAME, get_new_client_order_id, DEBUG
 )
+from hummingbot.connector.exchange.idex.idex_resolve import get_idex_rest_url
 
 
 class IdexExchange(ExchangeBase):
@@ -75,17 +76,17 @@ class IdexExchange(ExchangeBase):
 
     @property
     def trading_rules(self) -> Dict[str, TradingRule]:
-        """ Returns the trading rules associated with Idex orders/trades """
+        """Returns the trading rules associated with Idex orders/trades"""
         return self._trading_rules
 
     @property
     def name(self) -> str:
-        """ Returns the exchange name """
+        """Returns the exchange name"""
         return EXCHANGE_NAME
 
     @property
     def order_books(self) -> Dict[str, OrderBook]:
-        """ Returns the order books of all tracked trading pairs """
+        """Returns the order books of all tracked trading pairs"""
         return self._order_book_tracker.order_books
 
     @property
@@ -111,7 +112,7 @@ class IdexExchange(ExchangeBase):
 
     @property
     def limit_orders(self) -> List[LimitOrder]:
-        """ Returns a list of active limit orders being tracked """
+        """Returns a list of active limit orders being tracked"""
         return [
             in_flight_order.to_limit_order()
             for in_flight_order in self._in_flight_orders.values()
@@ -165,13 +166,16 @@ class IdexExchange(ExchangeBase):
 
     @staticmethod
     def get_order_price_quantum(trading_pair: str, price: Decimal) -> Decimal:
-        """ Provides the Idex standard minimum price increment across all trading pairs """
+        """Provides the Idex standard minimum price increment across all trading pairs"""
         return Decimal(0.00000001)
 
     @staticmethod
     def get_order_size_quantum(trading_pair: str, order_size: Decimal) -> Decimal:
-        """ Provides the Idex standard minimum order increment across all trading pairs """
+        """Provides the Idex standard minimum order increment across all trading pairs"""
         return Decimal(0.00000001)
+
+    def get_price(self, trading_pair: str, is_buy: bool) -> Decimal:
+        return self.c_get_price(trading_pair, is_buy)
 
     async def start_network(self):
         await self.stop_network()
@@ -240,7 +244,7 @@ class IdexExchange(ExchangeBase):
         Cancel an order. This function returns immediately.
         To get the cancellation result, you'll have to wait for OrderCancelledEvent.
         :param trading_pair: The market (e.g. BTC-USDT) of the order.
-        :param order_cancellation: The internal order id (also called client_order_id)
+        :param order_id: The internal order id (also called client_order_id)
         """
 
         order_cancellation = safe_ensure_future(self._execute_cancel(trading_pair, order_id))
@@ -273,7 +277,7 @@ class IdexExchange(ExchangeBase):
 
     @staticmethod
     async def get_ping():
-        """ Requests status of current connection. """
+        """Requests status of current connection."""
 
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/ping/"
@@ -283,8 +287,8 @@ class IdexExchange(ExchangeBase):
                     raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
         return
 
-    async def get_orders(self) -> List[Dict[str, Any]]:
-        """ Requests status of all active orders. Returns json data of all orders associated with wallet address """
+    async def list_orders(self) -> List[Dict[str, Any]]:
+        """Requests status of all active orders. Returns json data of all orders associated with wallet address"""
 
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/orders/"
@@ -301,7 +305,7 @@ class IdexExchange(ExchangeBase):
                 return data
 
     async def get_order(self, exchange_order_id: str) -> Dict[str, Any]:
-        """ Requests order information through API with exchange orderId. Returns json data with order details """
+        """Requests order information through API with exchange orderId. Returns json data with order details"""
 
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/orders/?orderId={exchange_order_id}"
@@ -318,7 +322,7 @@ class IdexExchange(ExchangeBase):
                 return data
 
     async def post_order(self, params) -> Dict[str, Any]:
-        """ Posts an order request to the Idex API. Returns json data with order details """
+        """Posts an order request to the Idex API. Returns json data with order details"""
 
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/orders"
@@ -389,7 +393,7 @@ class IdexExchange(ExchangeBase):
                 return data
 
     async def get_balances_from_api(self) -> Dict[Dict[str, Any]]:
-        """ Requests current balances of all assets through API. Returns json data with balance details """
+        """Requests current balances of all assets through API. Returns json data with balance details"""
 
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/balances/"
@@ -515,7 +519,7 @@ class IdexExchange(ExchangeBase):
         return self._order_book_tracker.order_books[trading_pair]
 
     async def _status_polling_loop(self):
-        """ Periodically update user balances and order status via REST API. Fallback measure for ws API updates. """
+        """Periodically update user balances and order status via REST API. Fallback measure for ws API updates."""
 
         while True:
             try:

@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from hummingbot.client.config.global_config_map import global_config_map
 
 # API Feed adjusted to sandbox url
