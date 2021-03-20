@@ -32,6 +32,8 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
                 api_key=os.getenv("IDEX_API_KEY"),
                 secret_key=os.getenv("IDEX_SECRET_KEY")
             )
+            # TODO Brian: May need trading_pairs in this parameter to receive subscriptions
+
         )
         cls.user_stream_tracker_task: asyncio.Task = safe_ensure_future(cls.user_stream_tracker.start())
 
