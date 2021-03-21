@@ -14,7 +14,7 @@ import websockets
 from websockets.exceptions import ConnectionClosed
 
 from hummingbot.connector.exchange.idex.idex_resolve import get_idex_ws_feed
-from hummingbot.connector.exchange.idex.idex_order_book import IdexOrderbook
+from hummingbot.connector.exchange.idex.idex_order_book import IdexOrderBook
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
 from hummingbot.logger import HummingbotLogger
 # from .client.asyncio import AsyncIdexClient
@@ -48,7 +48,7 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
         Get relevant order book class to access class specific methods
         :returns: OrderBook class
         """
-        return IdexOrderbook
+        return IdexOrderBook
 
     @property
     def last_recv_time(self) -> float:
@@ -94,10 +94,10 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                     subscribe_request: Dict[str, any] = {
                         "method": "subscribe",
                         "markets": self._trading_pairs,
-                        "subscriptions": ["orders", "trades", "balances"],
+                        "subscriptions": ["orders", "balances"],
                     }
 
-                    self.sub_token = self._idex_auth.fetch_ws_token()
+                    self.sub_token = await self._idex_auth.fetch_ws_token()
 
                     subscribe_request.update({"token": self.sub_token})
 
