@@ -42,7 +42,6 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
         self.sub_token: str = ""
         super(IdexAPIUserStreamDataSource, self).__init__()
 
-<<<<<<< HEAD
     @property
     def order_book_class(self):
         """
@@ -96,6 +95,7 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                     subscribe_request: Dict[str, any] = {
                         "method": "subscribe",
                         "markets": self._trading_pairs,
+
                         "subscriptions": ["orders", "balances"],
                     }
 
@@ -135,8 +135,7 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                                     "Retrying after 30 seconds...", exc_info=True)
                 await asyncio.sleep(30.0)
 
-    async def _inner_messages(self,
-                              ws: websockets.WebSocketClientProtocol) -> AsyncIterable[str]:
+    async def _inner_messages(self, ws: websockets.WebSocketClientProtocol) -> AsyncIterable[str]:
         """
         Generator function that returns messages from the web socket stream
         :param ws: current web socket connection

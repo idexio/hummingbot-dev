@@ -15,12 +15,23 @@ from eth_account.signers.local import LocalAccount
 # from typing import Optional
 
 from hummingbot.connector.exchange.idex.idex_user_stream_tracker import IdexUserStreamTracker
-from hummingbot.connector.exchange.idex.idex_exchange import IdexAuth  # , IdexExchange
+from hummingbot.connector.exchange.idex.idex_exchange import IdexAuth, IdexExchange
 # from hummingbot.connector.exchange.idex.idex_order_book_message import IdexOrderBookMessage
 
 # from hummingbot.core.utils.async_utils import safe_ensure_future
 # from hummingbot.connector.exchange.idex.idex_order_book_tracker import IdexOrderBookTracker
 # from hummingbot.core.event.events import OrderType
+from typing import Optional
+import contextlib
+from hummingbot.core.utils.async_utils import (
+    safe_ensure_future,
+    safe_gather,
+)
+from hummingbot.core.clock import Clock, ClockMode
+from decimal import Decimal
+import time
+# from hummingbot.connector.exchange.idex.idex_utils import get_idex_rest_url, get_idex_ws_feed
+
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -34,6 +45,166 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
     # IDEX_API_KEY = ""
     # IDEX_SECRET_KEY = ""
     # IDEX_PRIVATE_KEY = "not this time! ;P"  # don't commit me please
+
+    user_stream_tracker: Optional[IdexUserStreamTracker] = None
+
+    market: IdexExchange
+    stack: contextlib.ExitStack
+
+    @classmethod
+    def setUpClass(cls):
+        IDEX_API_KEY = "tkDey53dr1ZlyM2tzUAu82l+nhgzxCJl"
+        IDEX_SECRET_KEY = "889fe7dd-ea60-4bf4-86f8-4eec39146510"
+        IDEX_PRIVATE_KEY = "0227070369c04f55c66988ee3b272f8ae297cf7967ca7bad6d2f71f72072e18d"  # don't commit me please
+        #
+        cls.ev_loop: asyncio.BaseEventLoop = asyncio.get_event_loop()
+        cls.coinbase_pro_auth = IdexAuth(IDEX_API_KEY, IDEX_SECRET_KEY, IDEX_PRIVATE_KEY)
+        cls.trading_pairs = ["DIL-ETH"]
+        cls.user_stream_tracker: IdexUserStreamTracker = IdexUserStreamTracker(idex_auth=cls.idex_auth, trading_pairs=cls.trading_pairs)
+        cls.user_stream_tracker_task: asyncio.Task = safe_ensure_future(cls.user_stream_tracker.start())
+
+        cls.clock: Clock = Clock(ClockMode.REALTIME)
+        cls.market: IdexExchange = IdexExchange(
+            IDEX_API_KEY,
+            IDEX_SECRET_KEY,
+            IDEX_PRIVATE_KEY,
+            trading_pairs=cls.trading_pairs
+        )
+        print("Initializing Idex market... this will take about a minute.")
+        cls.clock.add_iterator(cls.market)
+        cls.stack = contextlib.ExitStack()
+        cls._clock = cls.stack.enter_context(cls.clock)
+        cls.ev_loop.run_until_complete(cls.wait_til_ready())
+        print("Ready.")
+
+    @classmethod
+    async def wait_til_ready(cls):
+        while True:
+            now = time.time()
+            next_iteration = now // 1.0 + 1
+            if cls.market.ready:
+                break
+            else:
+                await cls._clock.run_til(next_iteration)
+            await asyncio.sleep(1.0)
+
+    async def run_parallel_async(self, *tasks):
+        future: asyncio.Future = safe_ensure_future(safe_gather(*tasks))
+        while not future.done():
+            now = time.time()
+            next_iteration = now // 1.0 + 1
+            await self.clock.run_til(next_iteration)
+        return future.result()
+
+    def run_parallel(self, *tasks):
+        return self.ev_loop.run_until_complete(self.run_parallel_async(*tasks))
+
+    def test_limit_order_cancelled(self):
+        """
+        This test should be run after the developer has implemented the limit buy and cancel
+        in the corresponding market class
+        """
+        # self.assertGreater(self.market.get_balance("ETH"), Decimal("0.1"))
+        trading_pair = self.trading_pairs[0]
+        amount: Decimal = Decimal("0.02")
+        quantized_amount: Decimal = self.market.quantize_order_amount(trading_pair, amount)
+
+        # NOTE: coinbase grabs 80% of mkt price, I figure if we cancel it it doesn't really matter how small it is
+        bid_price: Decimal = "0.5"  # This is for the sandbox/rinkeby DIL-ETH
+        quantize_bid_price: Decimal = self.market.quantize_order_price(trading_pair, bid_price)
+
+        client_order_id = self.buy_limit_on_book(quantized_amount, quantize_bid_price)
+
+        self.ev_loop.run_until_complete(asyncio.sleep(5.0))
+        [open_message] = self.run_parallel(self.user_stream_tracker.user_stream.get())
+
+        # print(open_message)
+        # TODO:elliott-- orderbook message should be tailored to the below, or use "example" above and match keys
+        # self.assertTrue(isinstance(open_message, CoinbaseProOrderBookMessage))
+        # self.assertEqual(open_message.trading_pair, trading_pair)
+        # self.assertEqual(open_message.content["type"], "open")
+        # self.assertEqual(open_message.content["side"], "buy")
+        # self.assertEqual(open_message.content["product_id"], trading_pair)
+        # self.assertEqual(Decimal(open_message.content["price"]), quantize_bid_price)
+        # self.assertEqual(Decimal(open_message.content["remaining_size"]), quantized_amount)
+
+        self.run_parallel(asyncio.sleep(5.0))
+        # TODO:elliott-- make cancel a thing
+        self.market.cancel(trading_pair, client_order_id)
+
+        self.ev_loop.run_until_complete(asyncio.sleep(5.0))
+        [done_message] = self.run_parallel(self.user_stream_tracker.user_stream.get())
+
+        print("done")
+        print(done_message)
+        # TODO: uncomment and adapt to idex done message return
+        # self.assertEqual(done_message.trading_pair, trading_pair)
+        # self.assertEqual(done_message.content["type"], "done")
+        # self.assertEqual(done_message.content["side"], "buy")
+        # self.assertEqual(done_message.content["product_id"], trading_pair)
+        # self.assertEqual(Decimal(done_message.content["price"]), quantize_bid_price)
+        # self.assertEqual(Decimal(done_message.content["remaining_size"]), quantized_amount)
+        # self.assertEqual(done_message.content["reason"], "canceled")
+
+    @unittest.skip
+    def test_limit_order_filled(self):
+        """
+        This test should be run after the developer has implemented the limit buy in the corresponding market class
+        """
+        # probably unnecessary
+        # self.assertGreater(self.market.get_balance("ETH"), Decimal("0.1"))
+        # trading_pair = self.trading_pairs[0]
+        # amount: Decimal = Decimal("0.02")
+        # quantized_amount: Decimal = self.market.quantize_order_amount(trading_pair, amount)
+
+        # current_bid_price: Decimal = self.market.get_order_book(trading_pair)._best_bid
+        # print("current bid: ")
+        # print(current_bid_price)
+        # NOTE: coinbase does a limit buy that will fill (1.05 of market).. market order is easier.
+
+        # self.buy_limit_on_book(quantized_amount, quantize_bid_price)
+        quantity = "0.5"
+        self.market_buy(quantity)
+
+        self.ev_loop.run_until_complete(asyncio.sleep(5.0))
+        [message_1, message_2] = self.run_parallel(self.user_stream_tracker.user_stream.get(),
+                                                   self.user_stream_tracker.user_stream.get())
+        # TODO: replace coinbase messages w/ idex
+        print(message_1, message_2)
+        # self.assertTrue(isinstance(message_1, CoinbaseProOrderBookMessage))
+        # self.assertTrue(isinstance(message_2, CoinbaseProOrderBookMessage))
+        if message_1.content["type"] == "done":
+            done_message = message_1
+            match_message = message_2
+        else:
+            done_message = message_2
+            match_message = message_1
+
+        print(done_message)
+        # self.assertEqual(done_message.trading_pair, trading_pair)
+        # self.assertEqual(done_message.content["type"], "done")
+        # self.assertEqual(done_message.content["side"], "buy")
+        # self.assertEqual(done_message.content["product_id"], trading_pair)
+        # self.assertEqual(Decimal(done_message.content["price"]), quantize_bid_price)
+        # self.assertEqual(Decimal(done_message.content["remaining_size"]), Decimal(0.0))
+        # self.assertEqual(done_message.content["reason"], "filled")
+
+        print(match_message)
+        # self.assertEqual(match_message.trading_pair, trading_pair)
+        # self.assertEqual(match_message.content["type"], "match")
+        # self.assertEqual(match_message.content["side"], "sell")
+        # self.assertEqual(match_message.content["product_id"], trading_pair)
+        # self.assertLessEqual(Decimal(match_message.content["price"]), quantize_bid_price)
+        # self.assertEqual(Decimal(match_message.content["size"]), quantized_amount)
+
+    @unittest.skip
+    def test_user_stream_manually(self):
+        """
+        This test should be run before market functions like buy and sell are implemented.
+        Developer needs to manually trigger those actions in order for the messages to show up in the user stream.
+        """
+        self.ev_loop.run_until_complete(asyncio.sleep(30.0))
+        print(self.user_stream_tracker.user_stream)
 
     # first_order = OrderType.LIMIT?
     base_url = 'https://api-sandbox-eth.idex.io/'  # rest url for sandbox (rinkeby) ETH chain
@@ -154,11 +325,10 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
         'wallet': '0x3e4074B1C4D3081AA6Fb44B7503d71CdedDEf51b'
     }
 
-    # def create_test_buy_dil_order(self):
+    # def market_buy(self, quoteOrderQuantity):
     #     """
-    #     Test is used to create a sell order for ETH, therefore buying DIL
-    #     Tests create order to check trade level authentication (HMAC Header + ETH Wallet signature)
-    #     with request: POST /v1/orders
+    #     Test is used to create a market buy order for Dil, therefore buying ETH
+    #     This is used to see a filled order
     #     """
     #     path = '/v1/orders'
     #     url = urljoin(self.base_url, path)
@@ -169,9 +339,10 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
     #         'nonce': self.idex_auth.get_nonce_str(),  # example: "9436afa0-9ee6-11ea-8a53-71994564322f",
     #         'wallet': self.idex_auth.get_wallet_address(),  # example: "0xA71C4aeeAabBBB8D2910F41C2ca3964b81F7310d"
     #         'market': 'DIL-ETH',
-    #         'type': 0,  # enum value for market orders
+    #         'type': 1,  # enum value for market orders
     #         'side': 0,  # enum value for buy
-    #         'quoteOrderQuantity': '5.00000000',  # quoteOrderQuantity for market orders only
+    #         'quantity': quantized_amount,
+    #         'price': quantize_bid_price,
     #     }
     #
     #     signature_parameters = (  # see idex doc: https://docs.idex.io/#associate-wallet
@@ -206,7 +377,9 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
     #         },
     #         'signature': wallet_signature,
     #     }
-    #
+    #     # TODO: Finish converting this from buy limit to buy market and test functionality
+    #     # TODO: use clientIDs, so that coinbase cribbed code can identify orders
+    #     # TODO: self.buy_limit_on_book(quantized_amount, quantize_bid_price) <-- call should look like that
     #     print('payload:\n', pformat(payload))
     #
     #     auth_dict = self.idex_auth.generate_auth_dict(http_method='POST', url=url, body=payload)
@@ -230,6 +403,86 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
     #         self.fail(msg="Test account has insufficient funds to run the test")  # make test fail for awareness
     #     else:
     #         self.assertEqual(status, 200, msg=f'Unexpected error when creating order. Response: {response}')
+
+    def buy_limit_on_book(self, quantized_amount, quantize_bid_price):
+        """
+        Test is used to create a sell order for ETH, therefore buying DIL
+        Tests create order to check trade level authentication (HMAC Header + ETH Wallet signature)
+        with request: POST /v1/orders
+        """
+        path = '/v1/orders'
+        url = urljoin(self.base_url, path)
+
+        self.idex_auth.generate_nonce()  # re create nonce before each request
+
+        order = {
+            'nonce': self.idex_auth.get_nonce_str(),  # example: "9436afa0-9ee6-11ea-8a53-71994564322f",
+            'wallet': self.idex_auth.get_wallet_address(),  # example: "0xA71C4aeeAabBBB8D2910F41C2ca3964b81F7310d"
+            'market': 'DIL-ETH',
+            'type': 1,  # enum value for market orders
+            'side': 0,  # enum value for buy
+            'quantity': quantized_amount,
+            'price': quantize_bid_price,
+        }
+
+        signature_parameters = (  # see idex doc: https://docs.idex.io/#associate-wallet
+            ('uint8', 1),  # 0 - The signature hash version is 1 for Ethereum, 2 for BSC
+
+            ('uint128', self.idex_auth.get_nonce_int()),  # 1 - Nonce
+            ('address', order['wallet']),  # 2 - Signing wallet address
+            ('string', order['market']),  # 3 - Market symbol (e.g. ETH-USDC)
+            ('uint8', order['type']),  # 4 - Order type enum value
+            ('uint8', order['side']),  # 5 - Order side enum value
+
+            ('string', order['quoteOrderQuantity']),  # 6 - Order quantity in base or quote terms
+            ('bool', True),  # 7 - false if order quantity in base terms; true if order quantity in quote terms
+            ('string', ''),  # 8 - Order price or empty string if market order
+            ('string', ''),  # 9 - Order stop price or empty string if not a stop loss or take profit order
+
+            ('string', ''),  # 10 - Client order id or empty string
+            ('uint8', 0),  # 11 - Order time in force enum value
+            ('uint8', 0),  # 12 - Order self-trade prevention enum value
+            ('uint64', 0),  # 13 - Unused, always should be 0
+        )
+        wallet_signature = self.idex_auth.wallet_sign(signature_parameters)
+
+        payload = {
+            "parameters": {
+                'nonce': order['nonce'],  # example: "9436afa0-9ee6-11ea-8a53-71994564322f",
+                'wallet': order['wallet'],  # example: "0xA71C4aeeAabBBB8D2910F41C2ca3964b81F7310d"
+                "market": order['market'],
+                "type": "market",  # todo: declare enums
+                "side": "buy",
+                "quoteOrderQuantity": order['quoteOrderQuantity']
+            },
+            'signature': wallet_signature,
+        }
+        # TODO: Finish converting this from buy limit to buy market and test functionality
+        # TODO: use clientIDs, so that coinbase cribbed code can identify orders
+        # TODO: self.buy_limit_on_book(quantized_amount, quantize_bid_price) <-- call should look like that
+        print('payload:\n', pformat(payload))
+
+        auth_dict = self.idex_auth.generate_auth_dict(http_method='POST', url=url, body=payload)
+
+        print('auth_dict:\n', pformat(auth_dict))
+
+        status, response = self.ev_loop.run_until_complete(
+            self.rest_post(auth_dict['url'], payload, headers=auth_dict['headers'])
+        )
+        print('response:\n', pformat(response))
+
+        if status == 200:
+            # check order was correctly placed (if partially filled you get status: cancelled)
+            self.assertIsInstance(response, dict)
+            self.assertEqual(set(response.keys()), set(self.example_response_market_order_partially_filled))
+            # note: curious behavior observed: even if account has insufficient funds, an order can sometimes be placed
+            # and you get get response back which lacks fields: avgExecutionPrice and fills
+        elif status == 402:  # HTTP 402: Payment Required. Error due to lack of funds
+            self.assertIsInstance(response, dict) and self.assertEqual(set(response.keys()), {'code', 'message'})
+            self.assertEqual('INSUFFICIENT_FUNDS', response['code'])
+            self.fail(msg="Test account has insufficient funds to run the test")  # make test fail for awareness
+        else:
+            self.assertEqual(status, 200, msg=f'Unexpected error when creating order. Response: {response}')
 
     def create_test_sell_dil_order_limit(self):
         """
@@ -262,10 +515,10 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
             ('uint8', order['type']),  # 4 - Order type enum value
             ('uint8', order['side']),  # 5 - Order side enum value
 
-            ('string', order['quantity']),  # 6 - Order quantity in base or quote terms
-            ('bool', False),  # 7 - false if order quantity in base terms; true if order quantity in quote terms
+            ('string', order['quantity']),  # 6 - Order quantity in base (quoteOfQuantity for mkt/quote) terms
+            ('bool', False),  # 7 - false IF order quantity in base terms (limit); true if qoQ in quote terms (mkt)
             ('string', order['price']),  # 8 - Order price or empty string if market order
-            ('string', ''),  # 9 - Order stop price or empty string if not a stop loss or take profit order order['stopPrice']
+            ('string', ''),  # 9 - Order stop price or empty string if not a stop loss or take profit order
 
             ('string', ''),  # 10 - Client order id or empty string
             ('uint8', 0),  # 11 - Order time in force enum value
@@ -273,7 +526,6 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
             ('uint64', 0),  # 13 - Unused, always should be 0
         )
 
-        # TODO: elliott-- wallet sig is consistently invalid for anything but market order..
         wallet_signature = self.idex_auth.wallet_sign(signature_parameters)
 
         payload = {
@@ -314,6 +566,9 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
         else:
             self.assertEqual(status, 200, msg=f'Unexpected error when creating order. Response: {response}')
 
+    def cancel_order_with_id(self, order_id):
+        print("cancel")
+
     async def rest_post(self, url, payload, headers=None, params=None):
         async with aiohttp.ClientSession() as client:
             async with client.post(url, json=payload, headers=headers, params=params) as resp:
@@ -331,28 +586,26 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
                 body = await resp.json()
                 return resp.status, body
 
-    @classmethod
-    def setUpClass(cls):
-        print("setup")
-        IDEX_API_KEY = "tkDey53dr1ZlyM2tzUAu82l+nhgzxCJl"
-        IDEX_SECRET_KEY = "889fe7dd-ea60-4bf4-86f8-4eec39146510"
-        IDEX_PRIVATE_KEY = "0227070369c04f55c66988ee3b272f8ae297cf7967ca7bad6d2f71f72072e18d"  # don't commit me please
+    # @classmethod
+    # def setUpClass(cls):
+    #     print("setup")
 
-        cls.ev_loop: asyncio.BaseEventLoop = asyncio.get_event_loop()
-        cls.user_stream_tracker: IdexUserStreamTracker = IdexUserStreamTracker(
-            # idex_auth=IdexAuth(
-            #     api_key=os.getenv("IDEX_API_KEY"),
-            #     secret_key=os.getenv("IDEX_SECRET_KEY"),
-            #     wallet_private_key=os.getenv("IDEX_PRIVATE_KEY"),
-            # )
-            idex_auth=IdexAuth(
-                api_key=IDEX_API_KEY,
-                secret_key=IDEX_SECRET_KEY,
-                wallet_private_key=IDEX_PRIVATE_KEY,
-                # trading_pairs=["DIL-ETH", "PIP-ETH", "CUR-ETH"],
-                # trading_required=True,
-            )
-        )
+    #     cls.ev_loop: asyncio.BaseEventLoop = asyncio.get_event_loop()
+    #     cls.user_stream_tracker: IdexUserStreamTracker = IdexUserStreamTracker(
+    #         # idex_auth=IdexAuth(
+    #         #     api_key=os.getenv("IDEX_API_KEY"),
+    #         #     secret_key=os.getenv("IDEX_SECRET_KEY"),
+    #         #     wallet_private_key=os.getenv("IDEX_PRIVATE_KEY"),
+    #         # )
+    #         idex_auth=IdexAuth(
+    #             api_key=IDEX_API_KEY,
+    #             secret_key=IDEX_SECRET_KEY,
+    #             wallet_private_key=IDEX_PRIVATE_KEY,
+    #             # trading_pairs=["DIL-ETH", "PIP-ETH", "CUR-ETH"],
+    #             # trading_required=True,
+    #         )
+    #     )
+
         # cls.market: IdexExchange = IdexExchange(self.IDEX_API_KEY,
         #                                         self.IDEX_SECRET_KEY,
         #                                         self.IDEX_PRIVATE_KEY,
@@ -361,35 +614,44 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
         #                                         )
 
     # @unittest.skip
-    def test_user_stream(self):
-        print("streaming")
-        # Wait process some msgs.
-        self.ev_loop.run_until_complete(asyncio.sleep(10.0))
-        self.create_test_sell_dil_order_limit()
-        # print("-----------------------------------------")
-        # print(self.user_stream_tracker.user_stream)
-        # print("-----------------------------------------")
+    # def test_user_stream(self):
+    #     print("streaming")
+    #     # Wait process some msgs.
+    #     self.ev_loop.run_until_complete(asyncio.sleep(10.0))
+    #     self.create_test_sell_dil_order_limit()
+    #     print("-----------------------------------------")
+    #     print(self.user_stream_tracker.user_stream)
+    #     print(self.user_stream_tracker.last_recv_time)
+    #     print("-----------------------------------------")
 
-    def test_user_stream_manually(self):
-        """
-        This test should be run before market functions like buy and sell are implemented.
-        Developer needs to manually trigger those actions in order for the messages to show up in the user stream.
-        """
-        # self.ev_loop.run_until_complete(asyncio.sleep(10.0))
-        # print(self.user_stream_tracker.user_stream)
-        # print("Make an order then see if it shows up")
-        # print("goals: see if balances go through, create a second order, cancel an order")
-        # self.test_user_stream()
-        # self.create_test_sell_dil_order_limit()
-        # self.test_user_balance_access()
-        # self.create_test_buy_dil_order()
-        # self.create_test_sell_dil_order_limit()
+    # def test_user_stream_manually(self):
+    #     """
+    #     This test should be run before market functions like buy and sell are implemented.
+    #     Developer needs to manually trigger those actions in order for the messages to show up in the user stream.
+    #     """
+    #     # self.ev_loop.run_until_complete(asyncio.sleep(10.0))
+    #     # print(self.user_stream_tracker.user_stream)
+    #     # print("Make an order then see if it shows up")
+    #     # print("goals: see if balances go through, create a second order, cancel an order")
+    #     # self.test_user_stream()
+    #     # self.create_test_sell_dil_order_limit()
+    #     # self.test_user_balance_access()
+    #     # self.create_test_buy_dil_order()
+    #     # self.create_test_sell_dil_order_limit()
+    #
+    #     # self.test_user_balance_access()
 
-        # self.test_user_balance_access()
+# def main():  # idex
+#     print("MAIN!!!!!!!!!!!!!!!")
+#     unittest.main()
+#
+#
+# if __name__ == "__main__":  # idex
+#     main()
 
 
 def main():
-    print("MAIN!!!!!!!!!!!!!!!")
+    logging.basicConfig(level=logging.INFO)
     unittest.main()
 
 
