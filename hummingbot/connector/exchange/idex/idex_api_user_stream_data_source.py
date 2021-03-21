@@ -9,7 +9,7 @@ from typing import (
     List,
 )
 
-import ujson
+import json
 import websockets
 from websockets.exceptions import ConnectionClosed
 
@@ -102,10 +102,10 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                     subscribe_request.update({"token": self.sub_token})
 
                     # send sub request
-                    await ws.send(ujson.dumps(subscribe_request))
+                    await ws.send(json.dumps(subscribe_request))
 
                     async for raw_msg in self._inner_messages(ws):
-                        msg = ujson.loads(raw_msg)
+                        msg = json.loads(raw_msg)
                         msg_type: str = msg.get("type", None)
                         if msg_type is None:
                             raise ValueError(f"idex Websocket message does not contain a type - {msg}")
