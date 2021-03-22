@@ -400,7 +400,7 @@ class IdexExchange(ExchangeBase):
                 data = await response.json()
                 return data
 
-    async def get_balances_from_api(self) -> Dict[str, Any]:
+    async def get_balances_from_api(self) -> List[Dict[str, Any]]:
         """Requests current balances of all assets through API. Returns json data with balance details"""
 
         rest_url = get_idex_rest_url()
@@ -417,8 +417,7 @@ class IdexExchange(ExchangeBase):
                 data = await response.json()
                 return data
 
-    @staticmethod
-    async def get_exchange_info_from_api() -> Dict[str, Any]:
+    async def get_exchange_info_from_api(self) -> Dict[str, Any]:
         """Requests basic info about idex exchange. We are mostly interested in the gas price in gwei"""
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/exchange"

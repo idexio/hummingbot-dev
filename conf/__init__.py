@@ -38,6 +38,11 @@ kafka_bootstrap_server = "***REMOVED***"
 # whether to enable api mocking in unit test cases
 mock_api_enabled = os.getenv("MOCK_API_ENABLED")
 
+# Idex Test
+idex_api_key = os.getenv("IDEX_API_KEY")
+idex_secret_key = os.getenv("IDEX_SECRET_KEY")
+idex_account = os.getenv("IDEX_ACCOUNT")
+
 # ALL TEST KEYS
 for key in connector_keys().keys():
     locals()[key] = os.getenv(key.upper())

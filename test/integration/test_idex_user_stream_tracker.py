@@ -36,7 +36,7 @@ import time
 logging.basicConfig(level=logging.DEBUG)
 
 
-class IdexOrderBookTrackerUnitTest(unittest.TestCase):
+class IdexUserStreamTrackerUnitTest(unittest.TestCase):
     # order_book_tracker: Optional[IdexOrderBookTracker] = None
     IDEX_API_KEY = "889fe7dd-ea60-4bf4-86f8-4eec39146510"
     IDEX_SECRET_KEY = "tkDey53dr1ZlyM2tzUAu82l+nhgzxCJl"
