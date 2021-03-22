@@ -13,9 +13,14 @@ import json
 import websockets
 from websockets.exceptions import ConnectionClosed
 
+<<<<<<< HEAD
 from hummingbot.connector.exchange.idex.idex_resolve import get_idex_ws_feed
 from hummingbot.connector.exchange.idex.idex_order_book import IdexOrderBook
 
+=======
+from hummingbot.connector.exchange.idex.idex_utils import get_idex_ws_feed
+from hummingbot.connector.exchange.idex.idex_order_book import IdexOrderBook
+>>>>>>> resolve prep
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
 from hummingbot.logger import HummingbotLogger
 # from .client.asyncio import AsyncIdexClient
@@ -45,6 +50,10 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
     @property
     def order_book_class(self):
         """
+<<<<<<< HEAD
+=======
+        # NOTE: This doesn't actually seem to be used anywhere
+>>>>>>> resolve prep
         *required
         Get relevant order book class to access class specific methods
         :returns: OrderBook class
