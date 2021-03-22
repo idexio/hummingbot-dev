@@ -97,7 +97,7 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                         "subscriptions": ["orders", "balances"],
                     }
 
-                    self.sub_token = self._idex_auth.fetch_ws_token()
+                    self.sub_token = await self._idex_auth.fetch_ws_token()
 
                     subscribe_request.update({"token": self.sub_token})
 
