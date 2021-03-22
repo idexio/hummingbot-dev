@@ -192,7 +192,6 @@ class IdexAuth:
 
         params = urlencode(params)  # todo alf: order of param fields for signature ?
         url = f"{url}?{params}"
-        print('test')
         return {
             "headers": {
                 "IDEX-API-Key": self._api_key,
@@ -233,6 +232,8 @@ class IdexAuth:
     async def _rest_get(self, url, headers=None, params=None):
         async with aiohttp.ClientSession() as client:
             async with client.get(url, headers=headers, params=params) as resp:
+                if resp.status != 200:
+                    raise IOError(f"Error fetching data from {url}. HTTP status is {resp.status}")
                 body = await resp.json()
                 return resp.status, body
 

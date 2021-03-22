@@ -299,7 +299,7 @@ class IdexExchange(ExchangeBase):
         """Requests status of all active orders. Returns json data of all orders associated with wallet address"""
 
         rest_url = get_idex_rest_url()
-        url = f"{rest_url}/v1/orders/"
+        url = f"{rest_url}/v1/orders"
         params = {
             "nonce": self._idex_auth.generate_nonce(),
             "wallet": self._idex_auth.get_wallet_address()
@@ -316,7 +316,7 @@ class IdexExchange(ExchangeBase):
         """Requests order information through API with exchange orderId. Returns json data with order details"""
 
         rest_url = get_idex_rest_url()
-        url = f"{rest_url}/v1/orders/?orderId={exchange_order_id}"
+        url = f"{rest_url}/v1/orders?orderId={exchange_order_id}"
         params = {
             "nonce": self._idex_auth.get_nonce_str(),
             "wallet": self._idex_auth.get_wallet_address()
@@ -404,7 +404,7 @@ class IdexExchange(ExchangeBase):
         """Requests current balances of all assets through API. Returns json data with balance details"""
 
         rest_url = get_idex_rest_url()
-        url = f"{rest_url}/v1/balances/"
+        url = f"{rest_url}/v1/balances"
         params = {
             "nonce": self._idex_auth.get_nonce_str(),
             "wallet": self._idex_auth.get_wallet_address(),
