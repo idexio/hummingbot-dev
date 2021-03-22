@@ -410,6 +410,7 @@ class IdexUserStreamTrackerUnitTest(unittest.TestCase):
         Tests create order to check trade level authentication (HMAC Header + ETH Wallet signature)
         with request: POST /v1/orders
         """
+        print("buying a limit order on the book")
         path = '/v1/orders'
         url = urljoin(self.base_url, path)
 
@@ -434,9 +435,9 @@ class IdexUserStreamTrackerUnitTest(unittest.TestCase):
             ('uint8', order['type']),  # 4 - Order type enum value
             ('uint8', order['side']),  # 5 - Order side enum value
 
-            ('string', order['quoteOrderQuantity']),  # 6 - Order quantity in base or quote terms
-            ('bool', True),  # 7 - false if order quantity in base terms; true if order quantity in quote terms
-            ('string', ''),  # 8 - Order price or empty string if market order
+            ('string', order['quantity']),  # 6 - Order quantity in base or quote terms
+            ('bool', False),  # 7 - false if order quantity in base terms; true if order quantity in quote terms
+            ('string', '0.00000001'),  # 8 - Order price or empty string if market order
             ('string', ''),  # 9 - Order stop price or empty string if not a stop loss or take profit order
 
             ('string', ''),  # 10 - Client order id or empty string
@@ -453,7 +454,8 @@ class IdexUserStreamTrackerUnitTest(unittest.TestCase):
                 "market": order['market'],
                 "type": "market",  # todo: declare enums
                 "side": "buy",
-                "quoteOrderQuantity": order['quoteOrderQuantity']
+                "quantity": order['quantity'],
+                "price": order['price'],
             },
             'signature': wallet_signature,
         }
