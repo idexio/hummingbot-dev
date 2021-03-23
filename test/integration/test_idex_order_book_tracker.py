@@ -23,14 +23,35 @@ from hummingbot.core.utils.async_utils import (
     safe_gather,
 )
 
+from hummingbot.logger import struct_logger
 import hummingbot.connector.exchange.idex.idex_resolve
 
 
-class IdexOrderBookTrackerUnitTest(unittest.TestCase):
+# Set log level for this test
+# LOG_LEVEL = logging.DEBUG
+LOG_LEVEL = logging.INFO
+LOG_FORMAT = "%(levelname)s - %(filename)s:%(lineno)s - %(funcName)s(): %(message)s"
 
-    # log_level = logging.DEBUG
-    log_level = logging.INFO
-    _logger = None
+
+_logger = None
+
+
+def logger():
+    global _logger
+
+    def setup_logging():
+        logging.basicConfig(level=LOG_LEVEL, format=LOG_FORMAT)
+        logging.addLevelName(struct_logger.EVENT_LOG_LEVEL, "EVENT_LOG")
+        logging.addLevelName(struct_logger.METRICS_LOG_LEVEL, "METRIC_LOG")
+        logging.getLogger("hummingbot.core.event.event_reporter").setLevel(logging.DEBUG)
+
+    if _logger is None:
+        setup_logging()
+        _logger = logging.getLogger(__name__)
+    return _logger
+
+
+class IdexOrderBookTrackerUnitTest(unittest.TestCase):
 
     order_book_tracker: Optional[IdexOrderBookTracker] = None
     events: List[OrderBookEvent] = [
@@ -43,22 +64,14 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
         "PIP-ETH"
     ]
 
-    @classmethod
-    def logger(cls):
-        if cls._logger is None:
-            logging.basicConfig(
-                level=cls.log_level,
-                format="%(levelname)s - %(filename)s:%(lineno)s - %(funcName)s(): %(message)s"
-            )
-            cls._logger = logging.getLogger(__name__)
-        return cls._logger
+    logger = None
 
     @classmethod
     def setUpClass(cls):
         # force the use of the ETH sandbox
         hummingbot.connector.exchange.idex.idex_resolve._IS_IDEX_SANDBOX = True
         hummingbot.connector.exchange.idex.idex_resolve._IDEX_BLOCKCHAIN = 'ETH'
-        cls.logger()
+        cls.logger = logger()
         cls.ev_loop: asyncio.BaseEventLoop = asyncio.get_event_loop()
         cls.ev_loop.set_debug(True)
         cls.order_book_tracker: IdexOrderBookTracker = IdexOrderBookTracker(trading_pairs=cls.eth_sample_pairs)
