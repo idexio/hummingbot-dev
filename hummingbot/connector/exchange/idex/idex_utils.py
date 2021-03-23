@@ -103,6 +103,7 @@ def validate_idex_contract_blockchain(value: str) -> Optional[str]:
         return f'Value {value} must be one of: {IDEX_BLOCKCHAINS}'
 
 
+# Example: HBOT-B-DIL-ETH-64106538-8b61-11eb-b2bb-1e29c0300f46
 def get_new_client_order_id(is_buy: bool, trading_pair: str) -> str:
     side = "B" if is_buy else "S"
     return f"{HBOT_BROKER_ID}{side}-{trading_pair}-{get_tracking_nonce()}"
@@ -115,12 +116,18 @@ HB_ORDER_TYPE_MAP = {
 }
 
 
-def to_idex_order_type(
-        order_type: typing.Literal[
-            OrderType.MARKET,
-            OrderType.LIMIT,
-            OrderType.LIMIT_MAKER]):
+def to_idex_order_type(order_type: OrderType):
     return HB_ORDER_TYPE_MAP[order_type]
+
+
+HB_TRADE_TYPE_MAP = {
+    TradeType.BUY: "buy",
+    TradeType.SELL: "sell",
+}
+
+
+def to_idex_trade_type(trade_type: TradeType):
+    return HB_TRADE_TYPE_MAP[trade_type]
 
 
 IDEX_ORDER_TYPE_MAP = {
@@ -142,16 +149,6 @@ IDEX_TRADE_TYPE_MAP = {
 
 def from_idex_trade_type(side: str):
     return IDEX_TRADE_TYPE_MAP[side]
-
-
-HB_TRADE_TYPE_MAP = {
-    TradeType.BUY: "buy",
-    TradeType.SELL: "sell",
-}
-
-
-def to_idex_trade_type(trade_type: TradeType):
-    return HB_TRADE_TYPE_MAP[trade_type]
 
 
 KEYS = {

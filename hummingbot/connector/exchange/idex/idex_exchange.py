@@ -1,3 +1,4 @@
+import logging
 import math
 import time
 import asyncio
@@ -28,15 +29,17 @@ from hummingbot.connector.exchange.idex.idex_in_flight_order import IdexInFlight
 from hummingbot.connector.exchange.idex.idex_order_book_tracker import IdexOrderBookTracker
 from hummingbot.connector.exchange.idex.idex_user_stream_tracker import IdexUserStreamTracker
 from hummingbot.connector.exchange.idex.idex_utils import (
-    to_idex_order_type, to_idex_trade_type, EXCHANGE_NAME, get_new_client_order_id, DEBUG,
+    to_idex_order_type, to_idex_trade_type, from_idex_trade_type, from_idex_order_type, EXCHANGE_NAME, get_new_client_order_id, DEBUG,
     ETH_GAS_LIMIT, BSC_GAS_LIMIT, HUMMINGBOT_GAS_LOOKUP
 )
 from hummingbot.connector.exchange.idex.idex_resolve import (
     get_idex_rest_url, get_idex_blockchain,
 )
 from hummingbot.core.utils import eth_gas_station_lookup, async_ttl_cache
+from hummingbot.logger import HummingbotLogger
 
 s_decimal_0 = Decimal("0.0")
+ie_logger = None
 
 
 class IdexExchange(ExchangeBase):
@@ -46,6 +49,13 @@ class IdexExchange(ExchangeBase):
     SHORT_POLL_INTERVAL = 5.0
     LONG_POLL_INTERVAL = 120.0
     UPDATE_ORDER_STATUS_MIN_INTERVAL = 10.0
+
+    @classmethod
+    def logger(cls) -> HummingbotLogger:
+        global ie_logger
+        if ie_logger is None:
+            ie_logger = logging.getLogger(__name__)
+        return ie_logger
 
     def __init__(self,
                  idex_api_key: str,
@@ -182,15 +192,12 @@ class IdexExchange(ExchangeBase):
     @staticmethod
     def get_order_price_quantum(trading_pair: str, price: Decimal) -> Decimal:
         """Provides the Idex standard minimum price increment across all trading pairs"""
-        return Decimal(0.00000001)
+        return Decimal(str(0.00000001))
 
     @staticmethod
     def get_order_size_quantum(trading_pair: str, order_size: Decimal) -> Decimal:
         """Provides the Idex standard minimum order increment across all trading pairs"""
-        return Decimal(0.00000001)
-
-    def get_price(self, trading_pair: str, is_buy: bool) -> Decimal:
-        return self.c_get_price(trading_pair, is_buy)
+        return Decimal(str(0.00000001))
 
     async def start_network(self):
         await self.stop_network()
@@ -324,7 +331,7 @@ class IdexExchange(ExchangeBase):
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/orders?orderId={exchange_order_id}"
         params = {
-            "nonce": self._idex_auth.get_nonce_str(),
+            "nonce": self._idex_auth.generate_nonce(),
             "wallet": self._idex_auth.get_wallet_address()
         }
         auth_dict = self._idex_auth.generate_auth_dict(http_method="GET", url=url, params=params)
@@ -340,17 +347,21 @@ class IdexExchange(ExchangeBase):
 
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/orders"
+
         params.update({
             "nonce": self._idex_auth.generate_nonce(),
             "wallet": self._idex_auth.get_wallet_address()
         })
+
+        order_type = from_idex_order_type(params["type"])
+        trade_type = from_idex_trade_type(params["side"])
+        self.logger().info(f"Type Test price: {type(params['clientOrderId'])}")
         signature_parameters = self._idex_auth.build_signature_params_for_order(
             # TODO Brian: Did not include: stop_price, time_in_force, and selftrade_prevention. Add later as required.
             market=params["market"],
-            order_type=OrderTypeEnum[params["type"]],
-            order_side=OrderTypeEnum[params["side"]],
+            order_type=order_type,
+            order_side=trade_type,
             order_quantity=params["quantity"],
-            # I believe this will always be false as the order quantity need only be taken in base terms
             quantity_in_quote=False,
             price=params["price"],
             client_order_id=params["clientOrderId"],
@@ -361,10 +372,11 @@ class IdexExchange(ExchangeBase):
             "parameters": params,
             "signature": wallet_signature
         }
+        self.logger().info(body)
 
-        auth_dict = self._idex_auth.generate_auth_dict_for_post(url=url, body=body, wallet_signature=wallet_signature)
+        auth_dict = self._idex_auth.generate_auth_dict_for_post(url=url, body=body)
         session: aiohttp.ClientSession = await self._http_client()
-        async with session.post(auth_dict["url"], body=auth_dict["body"], headers=auth_dict["headers"]) as response:
+        async with session.post(auth_dict["url"], data=auth_dict["body"], headers=auth_dict["headers"]) as response:
             if response.status != 200:
                 raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
             data = await response.json()
@@ -406,11 +418,10 @@ class IdexExchange(ExchangeBase):
 
     async def get_balances_from_api(self) -> List[Dict[str, Any]]:
         """Requests current balances of all assets through API. Returns json data with balance details"""
-
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/balances"
         params = {
-            "nonce": self._idex_auth.get_nonce_str(),
+            "nonce": self._idex_auth.generate_nonce(),
             "wallet": self._idex_auth.get_wallet_address(),
         }
         auth_dict = self._idex_auth.generate_auth_dict(http_method="GET", url=url, params=params)
@@ -419,6 +430,7 @@ class IdexExchange(ExchangeBase):
             if response.status != 200:
                 raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
             data = await response.json()
+            self.logger().info(f"balances received: {data}")
             return data
 
     async def get_exchange_info_from_api(self) -> Dict[str, Any]:
@@ -469,6 +481,8 @@ class IdexExchange(ExchangeBase):
             "price": f"{price:f}",
             "clientOrderId": order_id
         }
+
+        self.logger().info(api_params)
         self.start_tracking_order(order_id,
                                   "",
                                   trading_pair,

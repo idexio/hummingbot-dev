@@ -203,7 +203,6 @@ class IdexAuth:
     def generate_auth_dict_for_post(
             self,
             url: str,
-            params: Dict[str, any],
             body: Dict[str, any],
             wallet_signature: str = None) -> Dict[str, any]:
         body = body or {}
