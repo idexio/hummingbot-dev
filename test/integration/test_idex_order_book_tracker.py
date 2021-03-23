@@ -23,8 +23,14 @@ from hummingbot.core.utils.async_utils import (
     safe_gather,
 )
 
+import hummingbot.connector.exchange.idex.idex_resolve
+
 
 class IdexOrderBookTrackerUnitTest(unittest.TestCase):
+
+    # log_level = logging.DEBUG
+    log_level = logging.INFO
+    _logger = None
 
     order_book_tracker: Optional[IdexOrderBookTracker] = None
     events: List[OrderBookEvent] = [
@@ -38,12 +44,32 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
     ]
 
     @classmethod
+    def logger(cls):
+        if cls._logger is None:
+            logging.basicConfig(
+                level=cls.log_level,
+                format="%(levelname)s - %(filename)s:%(lineno)s - %(funcName)s(): %(message)s"
+            )
+            cls._logger = logging.getLogger(__name__)
+        return cls._logger
+
+    @classmethod
     def setUpClass(cls):
+        # force the use of the ETH sandbox
+        hummingbot.connector.exchange.idex.idex_resolve._IS_IDEX_SANDBOX = True
+        hummingbot.connector.exchange.idex.idex_resolve._IDEX_BLOCKCHAIN = 'ETH'
+        cls.logger()
         cls.ev_loop: asyncio.BaseEventLoop = asyncio.get_event_loop()
+        cls.ev_loop.set_debug(True)
         cls.order_book_tracker: IdexOrderBookTracker = IdexOrderBookTracker(trading_pairs=cls.eth_sample_pairs)
 
         cls.order_book_tracker_task: asyncio.Task = safe_ensure_future(cls.order_book_tracker.start())
-        cls.ev_loop.run_until_complete(cls.wait_til_tracker_ready())
+        cls.ev_loop.run_until_complete(
+            asyncio.wait_for(
+                cls.wait_til_tracker_ready(),
+                timeout=5 * 60  # timeout to force tests termination on failure
+            )
+        )
 
     @classmethod
     async def wait_til_tracker_ready(cls):
@@ -127,7 +153,6 @@ class IdexOrderBookTrackerUnitTest(unittest.TestCase):
 
 
 def main():
-    logging.basicConfig(level=logging.INFO)
     unittest.main()
 
 
