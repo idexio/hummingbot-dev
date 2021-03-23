@@ -329,7 +329,7 @@ class IdexExchange(ExchangeBase):
         """Requests order information through API with exchange orderId. Returns json data with order details"""
 
         rest_url = get_idex_rest_url()
-        url = f"{rest_url}/v1/orders?orderId={exchange_order_id}"
+        url = f"{rest_url}/v1/orders"
         params = {
             "nonce": self._idex_auth.generate_nonce(),
             "wallet": self._idex_auth.get_wallet_address()

@@ -61,9 +61,9 @@ from unittest import mock
 logging.basicConfig(level=METRICS_LOG_LEVEL)
 # API_SECRET length must be multiple of 4 otherwise base64.b64decode will fail
 API_MOCK_ENABLED = conf.mock_api_enabled is not None and conf.mock_api_enabled.lower() in ['true', 'yes', '1']
-IDEX_API_KEY = ""
-IDEX_SECRET_KEY = ""
-IDEX_PRIVATE_KEY = ""
+IDEX_API_KEY = "889fe7dd-ea60-4bf4-86f8-4eec39146510"
+IDEX_SECRET_KEY = "tkDey53dr1ZlyM2tzUAu82l+nhgzxCJl"
+IDEX_PRIVATE_KEY = "0227070369c04f55c66988ee3b272f8ae297cf7967ca7bad6d2f71f72072e18d"
 API_BASE_URL = "https://api-eth.idex.io/"
 WS_BASE_URL = "wss://websocket-eth.idex.io/v1/"
 
