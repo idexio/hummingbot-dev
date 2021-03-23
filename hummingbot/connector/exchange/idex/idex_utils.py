@@ -109,46 +109,47 @@ def get_new_client_order_id(is_buy: bool, trading_pair: str) -> str:
     return f"{HBOT_BROKER_ID}{side}-{trading_pair}-{get_tracking_nonce()}"
 
 
-HB_ORDER_TYPE_MAP = {
+HB_ORDER_TYPE_TO_IDEX_PARAM_MAP = {
     OrderType.MARKET: "market",
     OrderType.LIMIT: "limit",
     OrderType.LIMIT_MAKER: "limitMaker",
 }
 
 
-def to_idex_order_type(order_type: OrderType):
-    return HB_ORDER_TYPE_MAP[order_type]
+def hb_order_type_to_idex_param(order_type: OrderType):
+    return HB_ORDER_TYPE_TO_IDEX_PARAM_MAP[order_type]
 
 
-HB_TRADE_TYPE_MAP = {
+HB_TRADE_TYPE_TO_IDEX_PARAM_MAP = {
     TradeType.BUY: "buy",
     TradeType.SELL: "sell",
 }
 
 
-def to_idex_trade_type(trade_type: TradeType):
-    return HB_TRADE_TYPE_MAP[trade_type]
+def hb_trade_type_to_idex_param(trade_type: TradeType):
+    return HB_TRADE_TYPE_TO_IDEX_PARAM_MAP[trade_type]
 
 
-IDEX_ORDER_TYPE_MAP = {
+IDEX_PARAM_TO_HB_ORDER_TYPE_MAP = {
     "market": OrderType.MARKET,
     "limit": OrderType.LIMIT,
     "limitMaker": OrderType.LIMIT_MAKER,
 }
 
 
-def from_idex_order_type(order_type: str):
-    return IDEX_ORDER_TYPE_MAP[order_type]
+def idex_param_to_hb_order_type(order_type: str):
+    return IDEX_PARAM_TO_HB_ORDER_TYPE_MAP[order_type]
 
 
-IDEX_TRADE_TYPE_MAP = {
+IDEX_PARAM_TO_HB_TRADE_TYPE_MAP = {
     "buy": TradeType.BUY,
     "sell": TradeType.SELL,
 }
 
 
-def from_idex_trade_type(side: str):
-    return IDEX_TRADE_TYPE_MAP[side]
+def idex_param_to_hb_trade_type(side: str):
+    return IDEX_PARAM_TO_HB_TRADE_TYPE_MAP[side]
+
 
 
 KEYS = {

@@ -1,5 +1,6 @@
 import json
 import hmac
+import logging
 import string
 import uuid
 import hashlib
@@ -16,6 +17,9 @@ from eth_typing import HexStr
 from web3 import Web3
 
 from hummingbot.connector.exchange.idex.idex_resolve import get_idex_rest_url, get_idex_blockchain
+from hummingbot.logger import HummingbotLogger
+
+ia_logger = None
 
 
 class HashVersionEnum(Enum):  # Blockchain
@@ -55,6 +59,13 @@ class OrderSelfTradePreventionEnum(Enum):
 class IdexAuth:
 
     HEX_DIGITS_SET = set(string.hexdigits)
+
+    @classmethod
+    def logger(cls) -> HummingbotLogger:
+        global ia_logger
+        if ia_logger is None:
+            ia_logger = logging.getLogger(__name__)
+        return ia_logger
 
     def __init__(self, api_key: str, secret_key: str, wallet_private_key: str = None):
         self._api_key = api_key
@@ -288,6 +299,20 @@ class IdexAuth:
                Default: OrderSelfTradePreventionEnum.dc
         :return: tuple of signature parameters
         """
+        self.logger().info(f"Hash-S: {market, type(market)}")
+        self.logger().info(f"Nonce-S: {market, type(market)}")
+        self.logger().info(f"Wallet-S: {market, type(market)}")
+        self.logger().info(f"Market-S: {market, type(market)}")
+        self.logger().info(f"Order Type-S: {order_type.value, type(order_type.value)}")
+        self.logger().info(f"Trade Type-S: {order_side.value, type(order_side.value)}")
+        self.logger().info(f"Quantity-S: {order_quantity, type(order_quantity)}")
+        self.logger().info(f"Quantity in Quote-S: {quantity_in_quote, type(quantity_in_quote)}")
+        self.logger().info(f"Price-S: {price, type(price)}")
+        self.logger().info(f"Stop Price-S: {stop_price, type(stop_price)}")
+        self.logger().info(f"Client Order Id-S: {client_order_id, type(client_order_id)}")
+        self.logger().info(f"Time in Force-S: {time_in_force.value, type(time_in_force.value)}")
+        self.logger().info(f"Self Trade Prevention-S: {selftrade_prevention.value, type(selftrade_prevention.value)}")
+
         hash_version = HashVersionEnum[get_idex_blockchain()]
         signature_parameters = (
             ('uint8', hash_version.value),  # 0 - The signature hash version is 1 for Ethereum, 2 for BSC
