@@ -76,7 +76,6 @@ class IdexUserStreamTrackerUnitTest(unittest.TestCase):
 
     @classmethod
     async def wait_til_ready(cls):
-        print("waiter")
         while True:
             now = time.time()
             next_iteration = now // 1.0 + 1
@@ -98,7 +97,7 @@ class IdexUserStreamTrackerUnitTest(unittest.TestCase):
         return self.ev_loop.run_until_complete(self.run_parallel_async(*tasks))
 
     @unittest.skip
-    def afravartest_user_stream_manually(self):
+    def test_user_stream_manually(self):
         """
         This test should be run before market functions like buy and sell are implemented.
         Developer needs to manually trigger those actions in order for the messages to show up in the user stream.
