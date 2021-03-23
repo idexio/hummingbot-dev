@@ -126,7 +126,7 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
                         elif msg_type in ["subscriptions"]:
                             subscriptions = msg.get("subscriptions")
                             for subscription in subscriptions:
-                                self.logger().info(f"subscription to {subscription['name']} received")
+                                self.logger().info("subscription to %s received", subscription['name'])
                         else:
                             raise ValueError(f"Unrecognized idex Websocket message received - {msg}")
                         await asyncio.sleep(0)
