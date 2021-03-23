@@ -332,6 +332,7 @@ class IdexAuth:
         :return: tuple of signature parameters
         """
         self.logger().info(f"Nonce-S: {self.get_nonce_int(), type(self.get_nonce_int())}")
+        self.logger().info(f"Nonce STR-S: {self.get_nonce_str(), type(self.get_nonce_str())}")
         self.logger().info(f"Wallet-S: {self.get_wallet_address(), type(self.get_wallet_address())}")
         self.logger().info(f"ClientID-S: {client_order_id, type(client_order_id)}")
         self.logger().info(f"Market-S: {market, type(market)}")

@@ -266,7 +266,7 @@ class IdexExchangeUnitTest(unittest.TestCase):
                              for event in self.market_logger.event_log]))
         # Reset the logs
         self.market_logger.clear()
-    '''
+    
     def test_limit_taker_sell(self):
         trading_pair = "DIL-ETH"
         price: Decimal = self.market.get_price(trading_pair, False)
@@ -292,20 +292,18 @@ class IdexExchangeUnitTest(unittest.TestCase):
                              for event in self.market_logger.event_log]))
         # Reset the logs
         self.market_logger.clear()
-
     '''
+
     def test_cancel_order(self):
         trading_pair = "DIL-ETH"
 
         current_bid_price: Decimal = self.market.get_price(trading_pair, True)
-        amount: Decimal = Decimal("1.5")
+        amount: Decimal = Decimal("5.0")
         self.assertGreater(self.market.get_balance("DIL"), amount)
 
         bid_price: Decimal = current_bid_price - Decimal("0.1") * current_bid_price
         quantize_bid_price: Decimal = self.market.quantize_order_price(trading_pair, bid_price)
         quantized_amount: Decimal = self.market.quantize_order_amount(trading_pair, amount)
-        self.logger().info(f"quantized amount:{quantized_amount}")
-
         order_id, exchange_order_id = self._place_order(True, trading_pair, quantized_amount, OrderType.LIMIT_MAKER,
                                                         quantize_bid_price, 10001, FixtureIdex.OPEN_BUY_LIMIT_ORDER,
                                                         FixtureIdex.WS_ORDER_OPEN)
@@ -315,7 +313,7 @@ class IdexExchangeUnitTest(unittest.TestCase):
         order_cancelled_event: OrderCancelledEvent = order_cancelled_event
         self.assertEqual(order_cancelled_event.order_id, order_id)
 
-    
+    '''
     def test_cancel_all(self):
         trading_pair = "DIL-ETH"
         bid_price: Decimal = self.market.get_price(trading_pair, True) * Decimal("0.5")
