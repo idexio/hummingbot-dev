@@ -408,7 +408,7 @@ class IdexExchange(ExchangeBase):
         url = f"{rest_url}/v1/orders"
 
         params = {
-            "nonce": self._idex_auth.get_nonce_str(),
+            "nonce": self._idex_auth.generate_nonce(),
             "wallet": self._idex_auth.get_wallet_address(),
             "orderId": f"client:{client_order_id}",
         }

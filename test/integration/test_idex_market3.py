@@ -294,7 +294,6 @@ class IdexExchangeUnitTest(unittest.TestCase):
         self.market_logger.clear()
     '''
 
-    '''
     def test_cancel_order(self):
         trading_pair = "DIL-ETH"
 
