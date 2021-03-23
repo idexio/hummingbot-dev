@@ -24,7 +24,7 @@ _IDEX_REST_URL = None
 _IDEX_WS_FEED = None
 
 _IDEX_BLOCKCHAIN = None
-_IS_IDEX_SANDBOX = True
+_IS_IDEX_SANDBOX = None
 
 
 def get_idex_blockchain():
