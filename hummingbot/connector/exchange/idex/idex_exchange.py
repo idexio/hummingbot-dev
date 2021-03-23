@@ -384,6 +384,7 @@ class IdexExchange(ExchangeBase):
             "parameters": params,
             "signature": wallet_signature
         }
+        self.logger().info(body)
 
         auth_dict = self._idex_auth.generate_auth_dict_for_post(url=url, body=body)
         session: aiohttp.ClientSession = await self._http_client()
@@ -407,7 +408,7 @@ class IdexExchange(ExchangeBase):
         url = f"{rest_url}/v1/orders"
 
         params = {
-            "nonce": self._idex_auth.generate_nonce(),
+            "nonce": self._idex_auth.get_nonce_str(),
             "wallet": self._idex_auth.get_wallet_address(),
             "orderId": f"client:{client_order_id}",
         }
@@ -449,6 +450,7 @@ class IdexExchange(ExchangeBase):
             if response.status != 200:
                 raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
             data = await response.json()
+            self.logger().info(f"balances received: {data}")
             return data
 
     async def get_exchange_info_from_api(self) -> Dict[str, Any]:
@@ -686,6 +688,7 @@ class IdexExchange(ExchangeBase):
         tracked_order = self._in_flight_orders.get(client_order_id)
         if not tracked_order:
             return
+        self.logger().info(f'Update Message:{update_msg}')
         if update_msg.get("F") or update_msg.get("fills") is not None:
             for fill_msg in update_msg["F"] if "F" in update_msg else update_msg.get("fills"):
                 self.logger().info(f'Fill Message:{fill_msg}')
@@ -833,7 +836,7 @@ class IdexExchange(ExchangeBase):
                 if event_type == 'orders':
                     self.logger().info("Receiving WS event")
                     await self._process_fill_message(event_data)
-                    self.logger().info("Processing WS event")
+                    self.logger().info('event data:', event_data)
                     self._process_order_message(event_data)
                 elif event_type == 'balances':
                     asset_name = event_data['a']

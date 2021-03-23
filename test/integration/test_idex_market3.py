@@ -265,8 +265,8 @@ class IdexExchangeUnitTest(unittest.TestCase):
         self.assertTrue(any([isinstance(event, BuyOrderCreatedEvent) and event.order_id == order_id
                              for event in self.market_logger.event_log]))
         # Reset the logs
-        self.market_logger.clear()
-    
+        self.market_logger.clear()    
+
     def test_limit_taker_sell(self):
         trading_pair = "DIL-ETH"
         price: Decimal = self.market.get_price(trading_pair, False)
@@ -294,6 +294,7 @@ class IdexExchangeUnitTest(unittest.TestCase):
         self.market_logger.clear()
     '''
 
+    '''
     def test_cancel_order(self):
         trading_pair = "DIL-ETH"
 
