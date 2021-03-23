@@ -261,7 +261,7 @@ class IdexExchange(ExchangeBase):
         safe_ensure_future(self._create_order(TradeType.SELL, order_id, trading_pair, amount, order_type, price))
         return order_id
 
-    def cancel(self, trading_pair: str, order_id: str):
+    def cancel(self, trading_pair: str, client_order_id: str):
         """
         Cancel an order. This function returns immediately.
         To get the cancellation result, you'll have to wait for OrderCancelledEvent.
@@ -269,7 +269,7 @@ class IdexExchange(ExchangeBase):
         :param order_id: The internal order id (also called client_order_id)
         """
 
-        order_cancellation = safe_ensure_future(self._execute_cancel(trading_pair, order_id))
+        order_cancellation = safe_ensure_future(self._execute_cancel(trading_pair, client_order_id))
         return order_cancellation
 
     async def _execute_cancel(self, trading_pair: str, client_order_id: str) -> str:
@@ -332,7 +332,8 @@ class IdexExchange(ExchangeBase):
         url = f"{rest_url}/v1/orders"
         params = {
             "nonce": self._idex_auth.generate_nonce(),
-            "wallet": self._idex_auth.get_wallet_address()
+            "wallet": self._idex_auth.get_wallet_address(),
+            "orderId": exchange_order_id
         }
         auth_dict = self._idex_auth.generate_auth_dict(http_method="GET", url=url, params=params)
         session: aiohttp.ClientSession = await self._http_client()
@@ -395,7 +396,7 @@ class IdexExchange(ExchangeBase):
             data = await response.json()
             return data
 
-    async def delete_order(self, trading_pair: str, order_id: str):
+    async def delete_order(self, trading_pair: str, client_order_id: str):
         """
         Deletes an order or all orders associated with a wallet from the Idex API.
         Returns json data with order id confirming deletion
@@ -403,16 +404,20 @@ class IdexExchange(ExchangeBase):
 
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/orders"
-        params = {
-            "nonce": self._idex_auth.generate_nonce(),
-            "wallet": self._idex_auth.get_wallet_address(),
-            "orderId": f"client:{order_id}"
-        }
+        nonce = self._idex_auth.generate_nonce()
+        self.logger().info(f"Nonce GEN: {nonce}")
+        self.logger().info(f"Nonce: {self._idex_auth.get_nonce_str()}")
+        self.logger().info(f"Wallet: {self._idex_auth.get_wallet_address()}")
+        self.logger().info(f"Client: {client_order_id}")
 
+        params = {
+            "nonce": self._idex_auth.get_nonce_str(),
+            "wallet": self._idex_auth.get_wallet_address(),
+            "orderId": f"client: {client_order_id}",
+        }
         signature_parameters = self._idex_auth.build_signature_params_for_cancel_order(
             # potential value: client_order_id=f"client:{order_id}"
-            client_order_id=order_id,
-            market=trading_pair,
+            client_order_id=client_order_id,
         )
         wallet_signature = self._idex_auth.wallet_sign(signature_parameters)
 
@@ -423,9 +428,10 @@ class IdexExchange(ExchangeBase):
 
         auth_dict = self._idex_auth.generate_auth_dict_for_delete(url=url, body=body, wallet_signature=wallet_signature)
         session: aiohttp.ClientSession = await self._http_client()
-        async with session.post(auth_dict["url"], body=auth_dict["body"], headers=auth_dict["headers"]) as response:
+        async with session.delete(auth_dict["url"], data=auth_dict["body"], headers=auth_dict["headers"]) as response:
             if response.status != 200:
-                raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
+                data = await response.json()
+                raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {data}")
             data = await response.json()
             return data
 
@@ -497,17 +503,6 @@ class IdexExchange(ExchangeBase):
             "selfTradePrevention": "dc"
         }
 
-        self.logger().info(f"Market: {trading_pair, type(trading_pair)}")
-        self.logger().info(f"Order Type: {idex_order_param, type(idex_order_param)}")
-        self.logger().info(f"Trade Type: {idex_trade_param, type(idex_trade_param)}")
-        self.logger().info(f"Quantity: {amount, type(amount)}")
-        self.logger().info(f"Price: {price, type(price)}")
-        self.logger().info(f"Client Order Id: {order_id, type(order_id)}")
-        self.logger().info(f"Time in Force: {api_params['timeInForce'], type(api_params['timeInForce'])}")
-        self.logger().info(
-            f"Self Trade Prevention: {api_params['selfTradePrevention'], type(api_params['selfTradePrevention'])}")
-
-        self.logger().info(api_params)
         self.start_tracking_order(order_id,
                                   "",
                                   trading_pair,
@@ -692,26 +687,28 @@ class IdexExchange(ExchangeBase):
         tracked_order = self._in_flight_orders.get(client_order_id)
         if not tracked_order:
             return
-        for fill_msg in update_msg["F"] if "F" in update_msg else update_msg.get("fills"):
-            self.logger().info(f'Fill Message:{fill_msg}')
-            updated = tracked_order.update_with_fill_update(fill_msg)
-            if not updated:
-                return
-            self.trigger_event(
-                MarketEvent.OrderFilled,
-                OrderFilledEvent(
-                    self.current_timestamp,
-                    tracked_order.client_order_id,
-                    tracked_order.trading_pair,
-                    tracked_order.trade_type,
-                    tracked_order.order_type,
-                    Decimal(str(fill_msg["p"] if "p" in fill_msg else fill_msg.get("price"))),
-                    Decimal(str(fill_msg["q"] if "q" in fill_msg else fill_msg.get("quantity"))),
-                    TradeFee(0.0, [(fill_msg["a"] if "a" in fill_msg else fill_msg.get("feeAsset"),
-                                    Decimal(str(fill_msg["f"] if "f" in fill_msg else fill_msg.get("fee"))))]),
-                    exchange_trade_id=update_msg["i"] if "i" in update_msg else update_msg.get("orderId")
+        self.logger().info(f'Update Message:{update_msg}')
+        if update_msg.get("F") or update_msg.get("fills") is not None:
+            for fill_msg in update_msg["F"] if "F" in update_msg else update_msg.get("fills"):
+                self.logger().info(f'Fill Message:{fill_msg}')
+                updated = tracked_order.update_with_fill_update(fill_msg)
+                if not updated:
+                    return
+                self.trigger_event(
+                    MarketEvent.OrderFilled,
+                    OrderFilledEvent(
+                        self.current_timestamp,
+                        tracked_order.client_order_id,
+                        tracked_order.trading_pair,
+                        tracked_order.trade_type,
+                        tracked_order.order_type,
+                        Decimal(str(fill_msg["p"] if "p" in fill_msg else fill_msg.get("price"))),
+                        Decimal(str(fill_msg["q"] if "q" in fill_msg else fill_msg.get("quantity"))),
+                        TradeFee(0.0, [(fill_msg["a"] if "a" in fill_msg else fill_msg.get("feeAsset"),
+                                        Decimal(str(fill_msg["f"] if "f" in fill_msg else fill_msg.get("fee"))))]),
+                        exchange_trade_id=update_msg["i"] if "i" in update_msg else update_msg.get("orderId")
+                    )
                 )
-            )
         if math.isclose(tracked_order.executed_amount_base, tracked_order.amount) or \
                 tracked_order.executed_amount_base >= tracked_order.amount:
             tracked_order.last_state = "filled"

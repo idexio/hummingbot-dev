@@ -299,19 +299,6 @@ class IdexAuth:
                Default: OrderSelfTradePreventionEnum.dc
         :return: tuple of signature parameters
         """
-        self.logger().info(f"Hash-S: {market, type(market)}")
-        self.logger().info(f"Nonce-S: {market, type(market)}")
-        self.logger().info(f"Wallet-S: {market, type(market)}")
-        self.logger().info(f"Market-S: {market, type(market)}")
-        self.logger().info(f"Order Type-S: {order_type.value, type(order_type.value)}")
-        self.logger().info(f"Trade Type-S: {order_side.value, type(order_side.value)}")
-        self.logger().info(f"Quantity-S: {order_quantity, type(order_quantity)}")
-        self.logger().info(f"Quantity in Quote-S: {quantity_in_quote, type(quantity_in_quote)}")
-        self.logger().info(f"Price-S: {price, type(price)}")
-        self.logger().info(f"Stop Price-S: {stop_price, type(stop_price)}")
-        self.logger().info(f"Client Order Id-S: {client_order_id, type(client_order_id)}")
-        self.logger().info(f"Time in Force-S: {time_in_force.value, type(time_in_force.value)}")
-        self.logger().info(f"Self Trade Prevention-S: {selftrade_prevention.value, type(selftrade_prevention.value)}")
 
         hash_version = HashVersionEnum[get_idex_blockchain()]
         signature_parameters = (
@@ -334,7 +321,7 @@ class IdexAuth:
 
     def build_signature_params_for_cancel_order(
             self,
-            market: str,
+            market: str = '',
             client_order_id: str = '',
     ) -> Tuple[Tuple[str, Any], ...]:
         """
@@ -344,6 +331,11 @@ class IdexAuth:
         :param client_order_id: Optional. Client-specified order id, maximum of 40 bytes, or empty string
         :return: tuple of signature parameters
         """
+        self.logger().info(f"Nonce-S: {self.get_nonce_int(), type(self.get_nonce_int())}")
+        self.logger().info(f"Wallet-S: {self.get_wallet_address(), type(self.get_wallet_address())}")
+        self.logger().info(f"ClientID-S: {client_order_id, type(client_order_id)}")
+        self.logger().info(f"Market-S: {market, type(market)}")
+
         signature_parameters = (
             ('uint128', self.get_nonce_int()),
             ('address', self.get_wallet_address()),
