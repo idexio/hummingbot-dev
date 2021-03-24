@@ -3,7 +3,7 @@
 #################################
 
 # For more detailed information: https://docs.hummingbot.io
-template_version: 18
+template_version: 19
 
 # Exchange configs
 bamboo_relay_use_coordinator: false
@@ -32,7 +32,10 @@ dydx_eth_private_key: null
 dydx_node_address: null
 
 idex_api_key: null
-idex_secret_key: null
+idex_api_secret_key: null
+idex_wallet_private_key: null
+idex_contract_blockchain: null
+idex_use_sandbox: null
 
 huobi_api_key: null
 huobi_secret_key: null
