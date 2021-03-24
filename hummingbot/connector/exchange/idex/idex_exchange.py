@@ -748,7 +748,18 @@ class IdexExchange(ExchangeBase):
         try:
             async with timeout(timeout_seconds):
                 results = await safe_gather(*tasks, return_exceptions=True)
-                for client_order_id in results:
+                self.logger().info(f"Cancel Exchange Order Ids: {results}")
+                exchange_order_id_list = []
+                client_order_id_list = []
+                # This is disgusting, I know. But it was the only way I could figure out how match the
+                # exchange_order_id dicts to in-flight order client IDs.
+                for result in results:
+                    exchange_order_id_list.append(result[0].get("orderId"))
+                for exchange_order_id in exchange_order_id_list:
+                    for order in incomplete_orders:
+                        if order.exchange_order_id == exchange_order_id:
+                            client_order_id_list.append(order.client_order_id)
+                for client_order_id in client_order_id_list:
                     if type(client_order_id) is str:
                         order_id_set.remove(client_order_id)
                         successful_cancellations.append(CancellationResult(client_order_id, True))
