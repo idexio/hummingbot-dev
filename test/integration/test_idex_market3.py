@@ -33,7 +33,7 @@ from hummingbot.core.event.events import (
     SellOrderCompletedEvent,
     SellOrderCreatedEvent,
     TradeFee,
-    TradeType,
+    TradeType, OrderType,
 )
 from hummingbot.core.event.event_logger import EventLogger
 from hummingbot.core.utils.async_utils import (
@@ -459,8 +459,6 @@ class IdexExchangeUnitTest(unittest.TestCase):
                 self.ev_loop.run_until_complete(asyncio.sleep(1))
                 print(order_book.last_trade_price)
                 self.assertFalse(math.isnan(order_book.last_trade_price))
-
-
 
     def test_order_fill_record(self):
         config_path: str = "test_config"
