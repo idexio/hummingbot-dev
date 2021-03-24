@@ -400,7 +400,7 @@ class IdexExchange(ExchangeBase):
         Deletes an order or all orders associated with a wallet from the Idex API.
         Returns json data with order id confirming deletion
         """
-        self.logger().info(f"This is a test.")
+        self.logger().info("This is a test.")
 
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/orders"
@@ -602,7 +602,8 @@ class IdexExchange(ExchangeBase):
                 order_side: TradeType,
                 amount: Decimal,
                 price: Decimal = s_decimal_NaN) -> TradeFee:
-        # TODO: Need a check on this estimate_fee call. 2nd param should return True if order is a taker.
+        # Assumption made here that some limit orders may end up incurring gas fees as takers if they cross the spread.
+        # This makes the fee estimate relatively conservative
         is_maker = order_type is OrderType.LIMIT_MAKER
         percent_fees: Decimal = estimate_fee(EXCHANGE_NAME, is_maker).percent
         if is_maker:
@@ -649,14 +650,14 @@ class IdexExchange(ExchangeBase):
         Updates in-flight order and triggers cancellation or failure event if needed.
         :param order_msg: The order response from either REST or web socket API (they are different formats)
         """
-        #self.logger().info(f"Order Message: {order_msg}")
+        # self.logger().info(f"Order Message: {order_msg}")
         client_order_id = order_msg["c"] if "c" in order_msg else order_msg.get("clientOrderId")
         if client_order_id not in self._in_flight_orders:
             return
         tracked_order = self._in_flight_orders[client_order_id]
         # Update order execution status
         tracked_order.last_state = order_msg["X"] if "X" in order_msg else order_msg.get("status")
-        #self.logger().info(f"Tracked Order Status: {tracked_order.last_state}")
+        # self.logger().info(f"Tracked Order Status: {tracked_order.last_state}")
         if tracked_order.is_cancelled:
             self.trigger_event(MarketEvent.OrderCancelled,
                                OrderCancelledEvent(
@@ -685,7 +686,7 @@ class IdexExchange(ExchangeBase):
         tracked_order = self._in_flight_orders.get(client_order_id)
         if not tracked_order:
             return
-        #self.logger().info(f'Update Message:{update_msg}')
+        # self.logger().info(f'Update Message:{update_msg}')
         if update_msg.get("F") or update_msg.get("fills") is not None:
             for fill_msg in update_msg["F"] if "F" in update_msg else update_msg.get("fills"):
                 self.logger().info(f'Fill Message:{fill_msg}')
@@ -843,7 +844,7 @@ class IdexExchange(ExchangeBase):
                 if event_type == 'orders':
                     self.logger().info("Receiving WS event")
                     await self._process_fill_message(event_data)
-                    self.logger().info('event data:', event_data)
+                    self.logger().info(f'event data: {event_data}')
                     self._process_order_message(event_data)
                 elif event_type == 'balances':
                     asset_name = event_data['a']
