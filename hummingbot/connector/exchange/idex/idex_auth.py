@@ -159,10 +159,15 @@ class IdexAuth:
             params: Dict[str, any] = None,
             body: Dict[str, any] = None,
             wallet_signature: str = None) -> Dict[str, any]:
-        http_method = http_method.strip().lower()
+        http_method = http_method.strip().upper()
         params = params or {}
         body = body or {}
-        return getattr(self, f"generate_auth_dict_for_{http_method}")(url, params, body, wallet_signature)
+        if http_method == 'GET':
+            return self.generate_auth_dict_for_get(url, params)
+        elif http_method in ['POST', 'DELETE']:
+            return self.generate_auth_dict_for_post(url, body, wallet_signature)
+        else:
+            raise ValueError(f"Http method: {http_method} not supported")
 
     # NOTE: elliott: this is 92% temporary, it would be best of this is cleaned up/made irrelevant
     def generate_auth_dict_for_ws(
