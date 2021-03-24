@@ -313,7 +313,7 @@ class IdexExchangeUnitTest(unittest.TestCase):
         order_cancelled_event: OrderCancelledEvent = order_cancelled_event
         self.assertEqual(order_cancelled_event.order_id, order_id)
 
-    '''
+
     def test_cancel_all(self):
         trading_pair = "DIL-ETH"
         bid_price: Decimal = self.market.get_price(trading_pair, True) * Decimal("0.5")
@@ -348,7 +348,7 @@ class IdexExchangeUnitTest(unittest.TestCase):
             self.logger().info(f"Cancellation Result: {cr.success}")
             self.assertEqual(cr.success, True)
 
-    '''
+
     @unittest.skipUnless(any("test_list_orders" in arg for arg in sys.argv), "List order test requires manual action.")
     def test_list_orders(self):
         self.assertGreater(self.market.get_balance("DIL"), Decimal("0.1"))
@@ -384,7 +384,7 @@ class IdexExchangeUnitTest(unittest.TestCase):
             bid_price: Decimal = current_bid_price * Decimal("0.8")
             quantize_bid_price: Decimal = self.market.quantize_order_price(trading_pair, bid_price)
 
-            amount: Decimal = Decimal("0.02")
+            amount: Decimal = Decimal("5.0")
             quantized_amount: Decimal = self.market.quantize_order_amount(trading_pair, amount)
 
             order_id, exchange_order_id = self._place_order(True, trading_pair, quantized_amount, OrderType.LIMIT_MAKER,
@@ -431,11 +431,12 @@ class IdexExchangeUnitTest(unittest.TestCase):
             self.market.restore_tracking_states(saved_market_states.saved_state)
             self.assertEqual(1, len(self.market.limit_orders))
             self.assertEqual(1, len(self.market.tracking_states))
-
+            self.logger().info("About to start the cancel!")
             # Cancel the order and verify that the change is saved.
             self._cancel_order(trading_pair, order_id, exchange_order_id, FixtureIdex.WS_ORDER_CANCELLED)
             self.run_parallel(self.market_logger.wait_for(OrderCancelledEvent))
             order_id = None
+
             self.assertEqual(0, len(self.market.limit_orders))
             self.assertEqual(0, len(self.market.tracking_states))
             saved_market_states = recorder.get_market_states(config_path, self.market)
@@ -456,6 +457,8 @@ class IdexExchangeUnitTest(unittest.TestCase):
                 print(order_book.last_trade_price)
                 self.assertFalse(math.isnan(order_book.last_trade_price))
 
+
+    '''
     def test_order_fill_record(self):
         config_path: str = "test_config"
         strategy_name: str = "test_strategy"
@@ -468,7 +471,7 @@ class IdexExchangeUnitTest(unittest.TestCase):
         try:
             # Try to buy 0.04 ETH from the exchange, and watch for completion event.
             price: Decimal = self.market.get_price(trading_pair, True)
-            amount: Decimal = Decimal("0.02")
+            amount: Decimal = Decimal("1.5")
             order_id, exchange_order_id = self._place_order(True, trading_pair, amount, OrderType.LIMIT, price, 10001,
                                                             FixtureIdex.BUY_MARKET_ORDER,
                                                             FixtureIdex.WS_AFTER_MARKET_BUY_2)
@@ -502,7 +505,7 @@ class IdexExchangeUnitTest(unittest.TestCase):
 
             recorder.stop()
             os.unlink(self.db_path)
-    '''
+
 
 if __name__ == "__main__":
     logging.getLogger("hummingbot.core.event.event_reporter").setLevel(logging.WARNING)
