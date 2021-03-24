@@ -3,7 +3,7 @@
 #################################
 
 # For more detailed information: https://docs.hummingbot.io
-template_version: 20
+template_version: 21
 
 # Exchange configs
 bamboo_relay_use_coordinator: false
@@ -36,6 +36,9 @@ coinbase_pro_passphrase: null
 
 dydx_eth_private_key: null
 dydx_node_address: null
+
+idex_api_key: null
+idex_secret_key: null
 
 huobi_api_key: null
 huobi_secret_key: null
