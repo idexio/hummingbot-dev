@@ -141,7 +141,7 @@ class IdexAuth:
 
     def get_wallet_address(self) -> HexStr:
         """public address of the wallet"""
-        return self._wallet.address
+        return self._wallet.address if self._wallet else ''
 
     def new_wallet_object(self, private_key: str = None) -> LocalAccount:
         private_key = private_key or self._wallet_private_key
@@ -170,29 +170,29 @@ class IdexAuth:
             raise ValueError(f"Http method: {http_method} not supported")
 
     # NOTE: elliott: this is 92% temporary, it would be best of this is cleaned up/made irrelevant
-    def generate_auth_dict_for_ws(
-            self,
-            url: str,
-            params: Dict[str, any],
-            body: Dict[str, any] = None,
-            wallet_signature: str = None) -> Dict[str, any]:
-
-        if "nonce" not in params:
-            params.update({
-                "nonce": self.generate_nonce()
-            })
-
-        params = urlencode(params)
-        url = f"{url}?{params}"
-        # NOTE: headers my be unnecessary here.
-        # https://docs.idex.io/?javascript#get-authentication-token
-        return {
-            "headers": {
-                "IDEX-API-Key": self._api_key,
-                "IDEX-HMAC-Signature": self.hmac_sign(params)
-            },
-            "url": url
-        }
+    # def generate_auth_dict_for_ws(
+    #         self,
+    #         url: str,
+    #         params: Dict[str, any],
+    #         body: Dict[str, any] = None,
+    #         wallet_signature: str = None) -> Dict[str, any]:
+    #
+    #     if "nonce" not in params:
+    #         params.update({
+    #             "nonce": self.generate_nonce()
+    #         })
+    #
+    #     params = urlencode(params)
+    #     url = f"{url}?{params}"
+    #     # NOTE: headers my be unnecessary here.
+    #     # https://docs.idex.io/?javascript#get-authentication-token
+    #     return {
+    #         "headers": {
+    #             "IDEX-API-Key": self._api_key,
+    #             "IDEX-HMAC-Signature": self.hmac_sign(params)
+    #         },
+    #         "url": url
+    #     }
 
     def generate_auth_dict_for_get(
             self,
@@ -268,7 +268,7 @@ class IdexAuth:
             'nonce': self.get_nonce_str(),
             'wallet': self.get_wallet_address(),
         }
-        auth_dict = self.generate_auth_dict_for_ws(url=url, params=url_params)
+        auth_dict = self.generate_auth_dict_for_get(url=url, params=url_params)
         _, response = await self._rest_get(
             url=auth_dict['url'],  # url already has the encoded url params included
             headers=auth_dict['headers'],
