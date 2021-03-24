@@ -126,6 +126,59 @@ class IdexAPIUserStreamDataSource(UserStreamTrackerDataSource):
         Generator function that returns messages from the web socket stream
         :param ws: current web socket connection
         :returns: message in AsyncIterable format
+
+        Balances Return:
+            {
+                "type": "balances",
+                "data": {
+                    "w": "0xA71C4aeeAabBBB8D2910F41C2ca3964b81F7310d",
+                    "a": "USDC",
+                    "q": "38192.94678100",
+                    "f": "26710.66678121",
+                    "l": "11482.28000000",
+                    "d": "38188.22"
+            }
+            }
+
+        Fills/Orders:
+            {
+                "type": "orders",
+                "data": {
+                    "m": "ETH-USDC",
+                    "i": "92782120-a775-11ea-aa55-4da1cc97a06d",
+                    "w": "0xA71C4aeeAabBBB8D2910F41C2ca3964b81F7310d",
+                    "t": 1590394200000,
+                    "T": 1590394200000,
+                    "x": "fill",
+                    "X": "filled",
+                    "u": 71228108,
+                    "o": "market",
+                    "S": "buy",
+                    "Q": "1000.00000000",
+                    "z": "4.95044603",
+                    "Z": "1000.00000000",
+                    "v": "202.00200000",
+                    "F": [
+                        {
+                            "i": "974480d0-a776-11ea-895b-bfcbb5bdaa50",
+                            "p": "202.00150000",
+                            "q": "3.78008801",
+                            "Q": "763.58344815",
+                            "t": 1590394200000,
+                            "s": "sell",
+                            "u": 981372,
+                            "f": "0.00756017",
+                            "a": "ETH",
+                            "l": "taker",
+                            "T": "0x01d28c33271cf1dd0eb04249617d3092f24bd9bad77ffb57a0316c3ce5425158",
+                            "S": "mined"
+                        },
+                        ...
+                    ]
+                }
+            }
+
+
         """
         # Terminate the recv() loop as soon as the next message timed out, so the outer loop can reconnect.
         try:
