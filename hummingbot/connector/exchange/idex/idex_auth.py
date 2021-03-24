@@ -169,31 +169,6 @@ class IdexAuth:
         else:
             raise ValueError(f"Http method: {http_method} not supported")
 
-    # NOTE: elliott: this is 92% temporary, it would be best of this is cleaned up/made irrelevant
-    # def generate_auth_dict_for_ws(
-    #         self,
-    #         url: str,
-    #         params: Dict[str, any],
-    #         body: Dict[str, any] = None,
-    #         wallet_signature: str = None) -> Dict[str, any]:
-    #
-    #     if "nonce" not in params:
-    #         params.update({
-    #             "nonce": self.generate_nonce()
-    #         })
-    #
-    #     params = urlencode(params)
-    #     url = f"{url}?{params}"
-    #     # NOTE: headers my be unnecessary here.
-    #     # https://docs.idex.io/?javascript#get-authentication-token
-    #     return {
-    #         "headers": {
-    #             "IDEX-API-Key": self._api_key,
-    #             "IDEX-HMAC-Signature": self.hmac_sign(params)
-    #         },
-    #         "url": url
-    #     }
-
     def generate_auth_dict_for_get(
             self,
             url: str,
