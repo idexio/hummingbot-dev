@@ -313,7 +313,6 @@ class IdexExchangeUnitTest(unittest.TestCase):
         order_cancelled_event: OrderCancelledEvent = order_cancelled_event
         self.assertEqual(order_cancelled_event.order_id, order_id)
 
-
     def test_cancel_all(self):
         trading_pair = "DIL-ETH"
         bid_price: Decimal = self.market.get_price(trading_pair, True) * Decimal("0.5")
@@ -347,7 +346,6 @@ class IdexExchangeUnitTest(unittest.TestCase):
         for cr in cancellation_results:
             self.logger().info(f"Cancellation Result: {cr.success}")
             self.assertEqual(cr.success, True)
-
 
     @unittest.skipUnless(any("test_list_orders" in arg for arg in sys.argv), "List order test requires manual action.")
     def test_list_orders(self):
