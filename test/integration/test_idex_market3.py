@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 from os.path import join, realpath
-import sys; sys.path.insert(0, realpath(join(__file__, "../../../")))
+import sys;
+
+sys.path.insert(0, realpath(join(__file__, "../../../")))
 
 from hummingbot.logger import HummingbotLogger
 
@@ -16,23 +18,22 @@ from typing import (
     Optional
 )
 import unittest
-# import math
+import math
 from hummingbot.core.clock import (
     Clock,
     ClockMode
 )
 from hummingbot.core.event.events import (
-    # BuyOrderCompletedEvent,
-    # BuyOrderCreatedEvent,
-    # MarketOrderFailureEvent,
+    BuyOrderCompletedEvent,
+    BuyOrderCreatedEvent,
+    MarketOrderFailureEvent,
     MarketEvent,
-    # OrderCancelledEvent,
-    # OrderFilledEvent,
-    OrderType,
-    # SellOrderCompletedEvent,
-    # SellOrderCreatedEvent,
-    # TradeFee,
-    # TradeType,
+    OrderCancelledEvent,
+    OrderFilledEvent,
+    SellOrderCompletedEvent,
+    SellOrderCreatedEvent,
+    TradeFee,
+    TradeType,
 )
 from hummingbot.core.event.event_logger import EventLogger
 from hummingbot.core.utils.async_utils import (
@@ -42,16 +43,15 @@ from hummingbot.core.utils.async_utils import (
 from hummingbot.logger.struct_logger import METRICS_LOG_LEVEL
 import hummingbot.connector.exchange.idex.idex_resolve
 from hummingbot.connector.exchange.idex.idex_exchange import IdexExchange
-# from hummingbot.connector.exchange.idex.idex_utils import HBOT_BROKER_ID
-# from hummingbot.connector.markets_recorder import MarketsRecorder
-# from hummingbot.model.market_state import MarketState
-# from hummingbot.model.order import Order
-# from hummingbot.model.sql_connection_manager import (
-#     SQLConnectionManager,
-#     SQLConnectionType
-# )
-# from hummingbot.model.trade_fill import TradeFill
-# from hummingbot.client.config.fee_overrides_config_map import fee_overrides_config_map
+from hummingbot.connector.markets_recorder import MarketsRecorder
+from hummingbot.model.market_state import MarketState
+from hummingbot.model.order import Order
+from hummingbot.model.sql_connection_manager import (
+     SQLConnectionManager,
+     SQLConnectionType
+)
+from hummingbot.model.trade_fill import TradeFill
+from hummingbot.client.config.fee_overrides_config_map import fee_overrides_config_map
 from test.integration.humming_web_app import HummingWebApp
 from test.integration.assets.mock_data.fixture_idex import FixtureIdex
 from test.integration.humming_ws_server import HummingWsServerFactory
