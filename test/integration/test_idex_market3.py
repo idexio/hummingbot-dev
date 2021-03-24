@@ -61,9 +61,9 @@ from unittest import mock
 logging.basicConfig(level=METRICS_LOG_LEVEL)
 # API_SECRET length must be multiple of 4 otherwise base64.b64decode will fail
 API_MOCK_ENABLED = conf.mock_api_enabled is not None and conf.mock_api_enabled.lower() in ['true', 'yes', '1']
-IDEX_API_KEY = "889fe7dd-ea60-4bf4-86f8-4eec39146510"
-IDEX_SECRET_KEY = "tkDey53dr1ZlyM2tzUAu82l+nhgzxCJl"
-IDEX_PRIVATE_KEY = "0227070369c04f55c66988ee3b272f8ae297cf7967ca7bad6d2f71f72072e18d"
+IDEX_API_KEY = "d88c5070-42ea-435f-ba26-8cb82064a973"
+IDEX_SECRET_KEY = "pLrUpy53o8enXTAHkOqsH8pLpQVMQ48p"
+IDEX_PRIVATE_KEY = "ad10037142dc378b3f004bbb4803e24984b8d92969ec9407efb56a0135661577"
 API_BASE_URL = "https://api-eth.idex.io/"
 WS_BASE_URL = "wss://websocket-eth.idex.io/v1/"
 
@@ -266,7 +266,7 @@ class IdexExchangeUnitTest(unittest.TestCase):
                              for event in self.market_logger.event_log]))
         # Reset the logs
         self.market_logger.clear()    
-
+    
     def test_limit_taker_sell(self):
         trading_pair = "DIL-ETH"
         price: Decimal = self.market.get_price(trading_pair, False)
@@ -293,7 +293,6 @@ class IdexExchangeUnitTest(unittest.TestCase):
         # Reset the logs
         self.market_logger.clear()
     
-
     def test_cancel_order(self):
         trading_pair = "DIL-ETH"
 
@@ -313,6 +312,7 @@ class IdexExchangeUnitTest(unittest.TestCase):
         order_cancelled_event: OrderCancelledEvent = order_cancelled_event
         self.assertEqual(order_cancelled_event.order_id, order_id)
 
+    '''
     def test_cancel_all(self):
         trading_pair = "DIL-ETH"
         bid_price: Decimal = self.market.get_price(trading_pair, True) * Decimal("0.5")
@@ -347,6 +347,7 @@ class IdexExchangeUnitTest(unittest.TestCase):
             self.logger().info(f"Cancellation Result: {cr.success}")
             self.assertEqual(cr.success, True)
 
+    '''
     @unittest.skipUnless(any("test_list_orders" in arg for arg in sys.argv), "List order test requires manual action.")
     def test_list_orders(self):
         self.assertGreater(self.market.get_balance("DIL"), Decimal("0.1"))
@@ -456,7 +457,7 @@ class IdexExchangeUnitTest(unittest.TestCase):
                 self.assertFalse(math.isnan(order_book.last_trade_price))
 
 
-    '''
+
     def test_order_fill_record(self):
         config_path: str = "test_config"
         strategy_name: str = "test_strategy"
@@ -503,7 +504,7 @@ class IdexExchangeUnitTest(unittest.TestCase):
 
             recorder.stop()
             os.unlink(self.db_path)
-
+    '''
 
 if __name__ == "__main__":
     logging.getLogger("hummingbot.core.event.event_reporter").setLevel(logging.WARNING)
