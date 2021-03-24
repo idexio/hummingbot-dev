@@ -411,7 +411,6 @@ class IdexExchange(ExchangeBase):
         Deletes an order or all orders associated with a wallet from the Idex API.
         Returns json data with order id confirming deletion
         """
-        self.logger().info("This is a test.")
 
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/orders"
@@ -421,7 +420,6 @@ class IdexExchange(ExchangeBase):
             "wallet": self._idex_auth.get_wallet_address(),
             "orderId": f"client:{client_order_id}",
         }
-        self.logger().info(f"Cancel ClientOID: {client_order_id}")
         signature_parameters = self._idex_auth.build_signature_params_for_cancel_order(
             # potential value: client_order_id=f"client:{order_id}"
             client_order_id=f"client:{client_order_id}",
@@ -435,14 +433,13 @@ class IdexExchange(ExchangeBase):
 
         auth_dict = self._idex_auth.generate_auth_dict_for_delete(url=url, body=body, wallet_signature=wallet_signature)
         session: aiohttp.ClientSession = await self._http_client()
-        self.logger().info(f"Cancelling order {client_order_id} for {trading_pair}.")
+        if DEBUG:
+            self.logger().info(f"Cancelling order {client_order_id} for {trading_pair}.")
         async with session.delete(auth_dict["url"], data=auth_dict["body"], headers=auth_dict["headers"]) as response:
-            self.logger().info(f"Cancelled order {client_order_id} for {trading_pair}. Awaiting response")
             if response.status != 200:
                 data = await response.json()
                 raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {data}")
             data = await response.json()
-            self.logger().info(f"Cancelled Response: {data}")
             return data
 
     async def get_balances_from_api(self) -> List[Dict[str, Any]]:
@@ -525,8 +522,9 @@ class IdexExchange(ExchangeBase):
             exchange_order_id = order_result["orderId"]
             tracked_order = self._in_flight_orders.get(order_id)
             if tracked_order is not None:
-                self.logger().info(f"Created {order_type.name} {trade_type.name} order {order_id} for "
-                                   f"{amount} {trading_pair}.")
+                if DEBUG:
+                    self.logger().info(f"Created {order_type.name} {trade_type.name} order {order_id} for "
+                                       f"{amount} {trading_pair}.")
                 tracked_order.update_exchange_order_id(exchange_order_id)
             event_tag = MarketEvent.BuyOrderCreated if trade_type is TradeType.BUY else MarketEvent.SellOrderCreated
             event_class = BuyOrderCreatedEvent if trade_type is TradeType.BUY else SellOrderCreatedEvent
@@ -647,7 +645,6 @@ class IdexExchange(ExchangeBase):
             for tracked_order in tracked_orders:
                 order_id = await tracked_order.get_exchange_order_id()
                 tasks.append(self.get_order(order_id))
-                self.logger().info(f"Looking for remaining order: {order_id}")
             self.logger().debug(f"Polling for order status updates of {len(tasks)} orders.")
             update_results = await safe_gather(*tasks, return_exceptions=True)
             for update_result in update_results:
