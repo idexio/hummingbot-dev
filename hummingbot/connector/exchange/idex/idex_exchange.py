@@ -32,7 +32,7 @@ from hummingbot.connector.exchange.idex.idex_utils import (
     ETH_GAS_LIMIT, BSC_GAS_LIMIT, HUMMINGBOT_GAS_LOOKUP,
 )
 from hummingbot.connector.exchange.idex.idex_resolve import (
-    get_idex_rest_url, get_idex_blockchain,
+    get_idex_rest_url, get_idex_blockchain, set_domain
 )
 from hummingbot.core.utils import eth_gas_station_lookup, async_ttl_cache
 from hummingbot.logger import HummingbotLogger
@@ -61,13 +61,16 @@ class IdexExchange(ExchangeBase):
                  idex_api_secret_key: str,
                  idex_wallet_private_key: str,
                  trading_pairs: Optional[List[str]] = None,
-                 trading_required: bool = True):
+                 trading_required: bool = True,
+                 domain="eth"):
         """
         :param idex_com_api_key: The API key to connect to private idex.io APIs.
         :param idex_com_secret_key: The API secret.
         :param trading_pairs: The market trading pairs which to track order book data.
         :param trading_required: Whether actual trading is needed.
         """
+        self._domain = domain
+        set_domain(domain)
         super().__init__()
         self._trading_required = trading_required
         self._trading_pairs = trading_pairs
@@ -97,7 +100,10 @@ class IdexExchange(ExchangeBase):
     @property
     def name(self) -> str:
         """Returns the exchange name"""
-        return EXCHANGE_NAME
+        if self._domain == "eth":  # prod with ETH blockchain
+            return "idex"
+        else:
+            return f"idex_{self._domain}"
 
     @property
     def order_books(self) -> Dict[str, OrderBook]:
@@ -339,7 +345,7 @@ class IdexExchange(ExchangeBase):
         async with session.get(auth_dict["url"], headers=auth_dict["headers"]) as response:
             if response.status != 200:
                 data = await response.json()
-                raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {data}")
+                raise IOError(f"Error fetching data from {url}, {auth_dict['url']}. HTTP status is {response.status}. {data}")
             data = await response.json()
             return data
 
@@ -400,7 +406,6 @@ class IdexExchange(ExchangeBase):
         Deletes an order or all orders associated with a wallet from the Idex API.
         Returns json data with order id confirming deletion
         """
-        self.logger().info(f"This is a test.")
 
         rest_url = get_idex_rest_url()
         url = f"{rest_url}/v1/orders"
@@ -649,14 +654,14 @@ class IdexExchange(ExchangeBase):
         Updates in-flight order and triggers cancellation or failure event if needed.
         :param order_msg: The order response from either REST or web socket API (they are different formats)
         """
-        #self.logger().info(f"Order Message: {order_msg}")
+        # self.logger().info(f"Order Message: {order_msg}")
         client_order_id = order_msg["c"] if "c" in order_msg else order_msg.get("clientOrderId")
         if client_order_id not in self._in_flight_orders:
             return
         tracked_order = self._in_flight_orders[client_order_id]
         # Update order execution status
         tracked_order.last_state = order_msg["X"] if "X" in order_msg else order_msg.get("status")
-        #self.logger().info(f"Tracked Order Status: {tracked_order.last_state}")
+        # self.logger().info(f"Tracked Order Status: {tracked_order.last_state}")
         if tracked_order.is_cancelled:
             self.trigger_event(MarketEvent.OrderCancelled,
                                OrderCancelledEvent(
@@ -685,7 +690,7 @@ class IdexExchange(ExchangeBase):
         tracked_order = self._in_flight_orders.get(client_order_id)
         if not tracked_order:
             return
-        #self.logger().info(f'Update Message:{update_msg}')
+        # self.logger().info(f'Update Message:{update_msg}')
         if update_msg.get("F") or update_msg.get("fills") is not None:
             for fill_msg in update_msg["F"] if "F" in update_msg else update_msg.get("fills"):
                 self.logger().info(f'Fill Message:{fill_msg}')

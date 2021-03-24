@@ -29,12 +29,32 @@ _IDEX_BLOCKCHAIN = None
 _IS_IDEX_SANDBOX = None
 
 
+def set_domain(domain):
+    global _IDEX_BLOCKCHAIN, _IS_IDEX_SANDBOX
+    if domain == "eth":  # prod eth
+        _IDEX_BLOCKCHAIN = 'ETH'
+        _IS_IDEX_SANDBOX = False
+    if domain == "bsc":  # prod bsc
+        _IDEX_BLOCKCHAIN = 'BSC'
+        _IS_IDEX_SANDBOX = False
+    elif domain == "sandbox_eth":
+        _IDEX_BLOCKCHAIN = 'ETH'
+        _IS_IDEX_SANDBOX = True
+    elif domain == "sandbox_bsc":
+        _IDEX_BLOCKCHAIN = 'BSC'
+        _IS_IDEX_SANDBOX = True
+    else:
+        raise Exception('Bad configuration of domain KEYS')
+
+
 def get_idex_blockchain():
     """Late loading of user selected blockchain from configuration"""
     global _IDEX_BLOCKCHAIN
     if _IDEX_BLOCKCHAIN is None:
-        _IDEX_BLOCKCHAIN = global_config_map["idex_contract_blockchain"].value or \
+        _IDEX_BLOCKCHAIN = str(  # todo: deprecating the use of global_config_map, refactor soon
+            global_config_map["idex_contract_blockchain"].value or
             global_config_map["idex_contract_blockchain"].default
+        ).upper()
     return _IDEX_BLOCKCHAIN
 
 
@@ -42,6 +62,7 @@ def is_idex_sandbox():
     """Late loading of user selection of using sandbox from configuration"""
     global _IS_IDEX_SANDBOX
     if _IS_IDEX_SANDBOX is None:
+        # todo: deprecating the use of global_config_map, refactor soon
         _IS_IDEX_SANDBOX = True if global_config_map["idex_use_sandbox"].value in ('true', 'yes', 'y') else False
     return _IS_IDEX_SANDBOX
 
