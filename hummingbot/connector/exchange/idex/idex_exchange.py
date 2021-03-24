@@ -201,9 +201,9 @@ class IdexExchange(ExchangeBase):
         await self.stop_network()
         self._order_book_tracker.start()
         if self._trading_required:
+            self._status_polling_task = safe_ensure_future(self._status_polling_loop())
             self._user_stream_tracker_task = safe_ensure_future(self._user_stream_tracker.start())
             self._user_stream_event_listener_task = safe_ensure_future(self._user_stream_event_listener())
-            self._status_polling_task = safe_ensure_future(self._status_polling_loop())
 
     async def stop_network(self):
         self._order_book_tracker.stop()
