@@ -9,15 +9,11 @@ from hummingbot.core.utils.tracking_nonce import get_tracking_nonce
 
 CENTRALIZED = False
 
-USE_ETHEREUM_WALLET = False # Should this be true?
+USE_ETHEREUM_WALLET = False
 
 EXAMPLE_PAIR = "IDEX-ETH"
 
 DEFAULT_FEES = [0.1, 0.2]
-
-# Missing FEE_TYPE per HB Task 4 (as needed) - this is checked by the estimate_fee function in estimate_fee.py
-
-# Missing FEE_TOKEN per HB Task 4 (as needed) - this is checked by the estimate_fee function in estimate_fee.py
 
 ETH_GAS_LIMIT = 170000  # estimation of upper limit of gas idex uses to move its smart contact for each fill
 BSC_GAS_LIMIT = 60000  # todo: estimate this from real taker orders

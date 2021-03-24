@@ -195,6 +195,7 @@ class IdexExchangeUnitTest(unittest.TestCase):
         self.assertEqual(len(limit_fee.flat_fees), 0)
         market_fee: TradeFee = self.market.get_fee("DIL", "ETH", OrderType.LIMIT, TradeType.BUY, 1)
         self.assertGreater(market_fee.percent, 0)
+        self.assertEqual(len(limit_fee.flat_fees), 1)
 
     def test_fee_overrides_config(self):
         fee_overrides_config_map["idex_taker_fee"].value = None
@@ -504,7 +505,6 @@ class IdexExchangeUnitTest(unittest.TestCase):
 
             recorder.stop()
             os.unlink(self.db_path)
-
 
 if __name__ == "__main__":
     logging.getLogger("hummingbot.core.event.event_reporter").setLevel(logging.WARNING)
