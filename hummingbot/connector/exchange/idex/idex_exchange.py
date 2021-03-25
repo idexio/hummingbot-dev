@@ -440,6 +440,7 @@ class IdexExchange(ExchangeBase):
                 data = await response.json()
                 raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {data}")
             data = await response.json()
+            self.logger().info(f"Cancelled Response: {data}")
             return data
 
     async def get_balances_from_api(self) -> List[Dict[str, Any]]:
@@ -522,9 +523,8 @@ class IdexExchange(ExchangeBase):
             exchange_order_id = order_result["orderId"]
             tracked_order = self._in_flight_orders.get(order_id)
             if tracked_order is not None:
-                if DEBUG:
-                    self.logger().info(f"Created {order_type.name} {trade_type.name} order {order_id} for "
-                                       f"{amount} {trading_pair}.")
+                self.logger().info(f"Created {order_type.name} {trade_type.name} order {order_id} for "
+                                   f"{amount} {trading_pair}.")
                 tracked_order.update_exchange_order_id(exchange_order_id)
             event_tag = MarketEvent.BuyOrderCreated if trade_type is TradeType.BUY else MarketEvent.SellOrderCreated
             event_class = BuyOrderCreatedEvent if trade_type is TradeType.BUY else SellOrderCreatedEvent
@@ -645,6 +645,7 @@ class IdexExchange(ExchangeBase):
             for tracked_order in tracked_orders:
                 order_id = await tracked_order.get_exchange_order_id()
                 tasks.append(self.get_order(order_id))
+                self.logger().info(f"Looking for remaining order: {order_id}")
             self.logger().debug(f"Polling for order status updates of {len(tasks)} orders.")
             update_results = await safe_gather(*tasks, return_exceptions=True)
             for update_result in update_results:

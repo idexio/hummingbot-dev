@@ -25,8 +25,8 @@ _IDEX_WS_FEED_PROD_BSC = "wss://websocket-bsc.idex.io/v1"
 _IDEX_REST_URL = None
 _IDEX_WS_FEED = None
 
-_IDEX_BLOCKCHAIN = None
-_IS_IDEX_SANDBOX = None
+_IDEX_BLOCKCHAIN = "ETH"
+_IS_IDEX_SANDBOX = True
 
 
 def get_idex_blockchain():
