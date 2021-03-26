@@ -443,6 +443,7 @@ class IdexExchange(ExchangeBase):
             "parameters": params,
             "signature": wallet_signature
         }
+
         auth_dict = self._idex_auth.generate_auth_dict_for_delete(url=url, body=body, wallet_signature=wallet_signature)
         session: aiohttp.ClientSession = await self._http_client()
         if DEBUG:
