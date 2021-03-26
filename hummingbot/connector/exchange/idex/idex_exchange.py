@@ -407,10 +407,11 @@ class IdexExchange(ExchangeBase):
         session: aiohttp.ClientSession = await self._http_client()
         response = await session.post(auth_dict["url"], data=auth_dict["body"], headers=auth_dict["headers"])
         if response.status != 200:
+            if DEBUG:
+                self.logger().warning('<<<<<<< session.post response: %s', response)
             data = await response.json()
             raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}."
                           f"Data is: {data}")
-
         data = await response.json()
         return data
 
@@ -544,8 +545,10 @@ class IdexExchange(ExchangeBase):
                                    price,
                                    order_id
                                ))
-        except asyncio.CancelledError:
-            raise
+        except asyncio.CancelledError as e:
+            if DEBUG:
+                self.logger().exception("<<<<<<<< _create_order received a CancelledError...")
+            raise e
         except Exception as e:
             self.stop_tracking_order(order_id)
             self.logger().network(
