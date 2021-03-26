@@ -361,6 +361,8 @@ class IdexExchange(ExchangeBase):
         session: aiohttp.ClientSession = await self._http_client()
         async with session.get(auth_dict["url"], headers=auth_dict["headers"]) as response:
             if response.status != 200:
+                if DEBUG:
+                    self.logger().error(f"<<<<< get_order(exchange_order_id:{exchange_order_id}) error {response}")
                 data = await response.json()
                 raise IOError(f"Error fetching data from {url}, {auth_dict['url']}. HTTP status is {response.status}. {data}")
             data = await response.json()
@@ -405,14 +407,15 @@ class IdexExchange(ExchangeBase):
             "parameters": params,
             "signature": wallet_signature
         }
-        self.logger().info(body)
+        if DEBUG:
+            self.logger().info(f"post_order body: {body}")
 
         auth_dict = self._idex_auth.generate_auth_dict_for_post(url=url, body=body)
         session: aiohttp.ClientSession = await self._http_client()
         async with session.post(auth_dict["url"], data=auth_dict["body"], headers=auth_dict["headers"]) as response:
             if response.status != 200:
                 if DEBUG:
-                    self.logger().warning('<<<<<<< session.post response: %s', response)
+                    self.logger().warning(f'<<<<<<< session.post response: {response}')
                 data = await response.json()
                 raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}."
                               f"Data is: {data}")
@@ -612,7 +615,7 @@ class IdexExchange(ExchangeBase):
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                self.logger().error(str(e), exc_info=True)
+                self.logger().exception(f'_status_polling_loop received exception: {e}. Details: ')
                 self.logger().network("Unexpected error while fetching account updates.",
                                       exc_info=True,
                                       app_warning_msg="Could not fetch account updates from Idex. "
@@ -662,11 +665,17 @@ class IdexExchange(ExchangeBase):
                 tasks.append(self.get_order(order_id))
             self.logger().debug(f"Polling for order status updates of {len(tasks)} orders.")
             update_results = await safe_gather(*tasks, return_exceptions=True)
+            # todo alf: fix this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            order_id_exception = [(o.client_order_id, r) for o, r in zip(tracked_orders, update_results)
+                                  if isinstance(r, Exception)]
             for update_result in update_results:
                 if isinstance(update_result, Exception):
-                    raise update_result
+                    self.logger().error(f"<<<< exception in _update_order_status get_order subtask: {update_result}")
+                    continue
                 await self._process_fill_message(update_result)
                 self._process_order_message(update_result)
+            if order_id_exception:
+                raise Exception(f"<<<< _update_order_status combined order_id_exception tuple: {order_id_exception}")
 
     def _process_order_message(self, order_msg: Dict[str, Any]):
         """
@@ -769,32 +778,47 @@ class IdexExchange(ExchangeBase):
         try:
             async with timeout(timeout_seconds):
                 results = await safe_gather(*tasks, return_exceptions=True)
-                exchange_order_id_list = []
-                client_order_id_list = []
+                incomplete_order_result = list(zip(incomplete_orders, results))
+                # exchange_order_id_list = []
+                # client_order_id_list = []
                 # This is disgusting, I know. But it was the only way I could figure out how match the
                 # exchange_order_id dicts to in-flight order client IDs.
-                for result in results:
-                    exchange_order_id_list.append(result[0].get("orderId"))
-                for exchange_order_id in exchange_order_id_list:
-                    for order in incomplete_orders:
-                        if order.exchange_order_id == exchange_order_id:
-                            client_order_id_list.append(order.client_order_id)
-                for client_order_id in client_order_id_list:
-                    if type(client_order_id) is str:
-                        order_id_set.remove(client_order_id)
-                        successful_cancellations.append(CancellationResult(client_order_id, True))
-                    else:
-                        self.logger().warning(
-                            f"failed to cancel order with error: "
-                            f"{repr(client_order_id)}"
+                for incomplete_order, result in incomplete_order_result:
+                    # todo alf: fix this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    if isinstance(result, Exception):
+                        self.logger().error(
+                            f"<<<< exception in cancel_all , subtask delete_order. "
+                            f"client_order_id: {incomplete_order.client_order_id}, error: {result}",
                         )
+                        continue
+                    # exchange_order_id_list.append(result[0].get("orderId"))
+                    order_id_set.remove(incomplete_order.client_order_id)
+                    successful_cancellations.append(CancellationResult(incomplete_order.client_order_id, True))
+                # for exchange_order_id in exchange_order_id_list:
+                #     for order in incomplete_orders:
+                #         if order.exchange_order_id == exchange_order_id:
+                #             client_order_id_list.append(order.client_order_id)
+                # for client_order_id in client_order_id_list:
+                #     if type(client_order_id) is str:
+                #         order_id_set.remove(client_order_id)
+                #         successful_cancellations.append(CancellationResult(client_order_id, True))
+                #     else:
+                #         self.logger().warning(
+                #             f"failed to cancel order with error: "
+                #             f"{repr(client_order_id)}"
+                #         )
+        except asyncio.CancelledError as e:
+            if DEBUG:
+                self.logger().exception(f"cancel_all got async Cancellation error {e}. Details: ")
+            raise e
         except Exception as e:
             self.logger().network(
                 f"Unexpected error cancelling orders. Error: {str(e)}",
                 exc_info=True,
                 app_warning_msg="Failed to cancel order on Idex. Check API key and network connection."
             )
-
+        # todo alf: what is the point of keeping failed_cancellations and successful_cancellations lists ?
+        #  ... are we not supposed to send Hummingbot events for these ?
         failed_cancellations = [CancellationResult(oid, False) for oid in order_id_set]
         return successful_cancellations + failed_cancellations
 
@@ -861,7 +885,7 @@ class IdexExchange(ExchangeBase):
             try:
                 if 'type' not in event_message or 'data' not in event_message:
                     if DEBUG:
-                        self.logger().warning('unknown event received: %s', event_message)
+                        self.logger().warning(f'unknown event received: {event_message}')
                     continue
                 event_type, event_data = event_message['type'], event_message['data']
                 if event_type == 'orders':

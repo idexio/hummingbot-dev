@@ -240,7 +240,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
         while True:
             idex_ws_feed = get_idex_ws_feed()
             if DEBUG:
-                self.logger().info("IOB.listen_for_trades new connection to ws: %s", idex_ws_feed)
+                self.logger().info(f"IOB.listen_for_trades new connection to ws: {idex_ws_feed}")
             try:
                 trading_pairs: List[str] = self._trading_pairs
                 async with websockets.connect(idex_ws_feed) as ws:
@@ -255,7 +255,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                         msg = ujson.loads(raw_msg)
                         msg_type: str = msg.get("type", None)
                         if DEBUG:
-                            self.logger().info('<<<<< ws msg: %s', msg)
+                            self.logger().info(f'<<<<< ws msg: {msg}')
                         if msg_type is None:
                             raise ValueError(f"Idex Websocket message does not contain a type - {msg}")
                         elif msg_type == "error":
@@ -304,7 +304,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
         while True:
             idex_ws_feed = get_idex_ws_feed()
             if DEBUG:
-                self.logger().info("IOB.listen_for_order_book_diffs new connection to ws: %s", idex_ws_feed)
+                self.logger().info(f"IOB.listen_for_order_book_diffs new connection to ws: {idex_ws_feed}")
             try:
                 trading_pairs: List[str] = self._trading_pairs
                 async with websockets.connect(idex_ws_feed) as ws:
@@ -319,7 +319,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                         msg = ujson.loads(raw_msg)
                         msg_type: str = msg.get("type", None)
                         if DEBUG:
-                            self.logger().info('<<<<< ws msg: %s', msg)
+                            self.logger().info(f'<<<<< ws msg: {msg}')
                         if msg_type is None:
                             raise ValueError(f"Idex WebSocket message does not contain a type - {msg}")
                         elif msg_type == "error":
@@ -354,7 +354,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
                         try:
                             snapshot: Dict[str, Any] = await self.get_snapshot(client, trading_pair)
                             if DEBUG:
-                                self.logger().info('<<<<< aiohttp snapshot response: %s', snapshot)
+                                self.logger().info(f'<<<<< aiohttp snapshot response: {snapshot}')
                             snapshot_timestamp: float = time.time()
                             snapshot_msg: OrderBookMessage = IdexOrderBook.snapshot_message_from_exchange(
                                 snapshot,
