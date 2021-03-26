@@ -409,15 +409,15 @@ class IdexExchange(ExchangeBase):
 
         auth_dict = self._idex_auth.generate_auth_dict_for_post(url=url, body=body)
         session: aiohttp.ClientSession = await self._http_client()
-        response = await session.post(auth_dict["url"], data=auth_dict["body"], headers=auth_dict["headers"])
-        if response.status != 200:
-            if DEBUG:
-                self.logger().warning('<<<<<<< session.post response: %s', response)
+        async with session.post(auth_dict["url"], data=auth_dict["body"], headers=auth_dict["headers"]) as response:
+            if response.status != 200:
+                if DEBUG:
+                    self.logger().warning('<<<<<<< session.post response: %s', response)
+                data = await response.json()
+                raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}."
+                              f"Data is: {data}")
             data = await response.json()
-            raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}."
-                          f"Data is: {data}")
-        data = await response.json()
-        return data
+            return data
 
     async def delete_order(self, trading_pair: str, client_order_id: str):
         """
