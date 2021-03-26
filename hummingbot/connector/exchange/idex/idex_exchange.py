@@ -135,7 +135,7 @@ class IdexExchange(ExchangeBase):
     def limit_orders(self) -> List[LimitOrder]:
         """Returns a list of active limit orders being tracked"""
         return [
-            in_flight_order.to_limit_order()
+            self._in_flight_orders.to_limit_order()
             for in_flight_order in self._in_flight_orders.values()
         ]
 
@@ -288,7 +288,9 @@ class IdexExchange(ExchangeBase):
             tracked_order = self._in_flight_orders.get(client_order_id)
             if tracked_order is None:
                 raise ValueError(f"Failed to cancel order - {client_order_id}. Order not found.")
-            exchange_order_id = await self._in_flight_orders.get(client_order_id).get_exchange_order_id()
+            tracked_order = self._in_flight_orders.get(client_order_id)
+            await asyncio.sleep(1)
+            exchange_order_id = await tracked_order.get_exchange_order_id()
             cancelled_id = await self.delete_order(trading_pair, client_order_id)
             format_cancelled_id = cancelled_id[0].get("orderId")
             self.logger().info(f"Cancelled ID:{format_cancelled_id}.")
@@ -403,14 +405,14 @@ class IdexExchange(ExchangeBase):
 
         auth_dict = self._idex_auth.generate_auth_dict_for_post(url=url, body=body)
         session: aiohttp.ClientSession = await self._http_client()
-        async with session.post(auth_dict["url"], data=auth_dict["body"], headers=auth_dict["headers"]) as response:
-            if response.status != 200:
-                data = await response.json()
-                raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}."
-                              f"Data is: {data}")
-
+        response = await session.post(auth_dict["url"], data=auth_dict["body"], headers=auth_dict["headers"])
+        if response.status != 200:
             data = await response.json()
-            return data
+            raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}."
+                          f"Data is: {data}")
+
+        data = await response.json()
+        return data
 
     async def delete_order(self, trading_pair: str, client_order_id: str):
         """
@@ -436,7 +438,6 @@ class IdexExchange(ExchangeBase):
             "parameters": params,
             "signature": wallet_signature
         }
-
         auth_dict = self._idex_auth.generate_auth_dict_for_delete(url=url, body=body, wallet_signature=wallet_signature)
         session: aiohttp.ClientSession = await self._http_client()
         if DEBUG:
