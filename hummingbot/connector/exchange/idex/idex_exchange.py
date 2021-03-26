@@ -304,9 +304,9 @@ class IdexExchange(ExchangeBase):
             if "order not found" in str(e):
                 # The order was never there to begin with. So cancelling it is a no-op but semantically successful.
                 self.logger().info(f"The order {client_order_id} does not exist on Idex. No cancellation needed.")
-                self.c_stop_tracking_order(client_order_id)
-                self.c_trigger_event(self.MARKET_ORDER_CANCELLED_EVENT_TAG,
-                                     OrderCancelledEvent(self._current_timestamp, client_order_id))
+                self.stop_tracking_order(client_order_id)
+                self.trigger_event(self.MARKET_ORDER_CANCELLED_EVENT_TAG,
+                                   OrderCancelledEvent(self._current_timestamp, client_order_id))
                 return client_order_id
         except asyncio.CancelledError:
             raise
