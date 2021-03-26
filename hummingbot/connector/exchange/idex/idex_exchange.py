@@ -670,7 +670,7 @@ class IdexExchange(ExchangeBase):
                 tasks.append(self.get_order(order_id))
             self.logger().debug(f"Polling for order status updates of {len(tasks)} orders.")
             update_results = await safe_gather(*tasks, return_exceptions=True)
-            # todo alf: fix this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            # todo alf: more work needed here ??
             order_id_exception = [(o.client_order_id, r) for o, r in zip(tracked_orders, update_results)
                                   if isinstance(r, Exception)]
             for update_result in update_results:
@@ -784,34 +784,16 @@ class IdexExchange(ExchangeBase):
             async with timeout(timeout_seconds):
                 results = await safe_gather(*tasks, return_exceptions=True)
                 incomplete_order_result = list(zip(incomplete_orders, results))
-                # exchange_order_id_list = []
-                # client_order_id_list = []
-                # This is disgusting, I know. But it was the only way I could figure out how match the
-                # exchange_order_id dicts to in-flight order client IDs.
                 for incomplete_order, result in incomplete_order_result:
-                    # todo alf: fix this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    # todo alf: more work needed here ??
                     if isinstance(result, Exception):
                         self.logger().error(
                             f"<<<< exception in cancel_all , subtask delete_order. "
                             f"client_order_id: {incomplete_order.client_order_id}, error: {result}",
                         )
                         continue
-                    # exchange_order_id_list.append(result[0].get("orderId"))
                     order_id_set.remove(incomplete_order.client_order_id)
                     successful_cancellations.append(CancellationResult(incomplete_order.client_order_id, True))
-                # for exchange_order_id in exchange_order_id_list:
-                #     for order in incomplete_orders:
-                #         if order.exchange_order_id == exchange_order_id:
-                #             client_order_id_list.append(order.client_order_id)
-                # for client_order_id in client_order_id_list:
-                #     if type(client_order_id) is str:
-                #         order_id_set.remove(client_order_id)
-                #         successful_cancellations.append(CancellationResult(client_order_id, True))
-                #     else:
-                #         self.logger().warning(
-                #             f"failed to cancel order with error: "
-                #             f"{repr(client_order_id)}"
-                #         )
         except asyncio.CancelledError as e:
             if DEBUG:
                 self.logger().exception(f"cancel_all got async Cancellation error {e}. Details: ")
