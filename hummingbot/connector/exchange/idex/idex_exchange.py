@@ -21,7 +21,6 @@ from hummingbot.core.event.events import (
 )
 from hummingbot.core.network_iterator import NetworkStatus
 from hummingbot.core.utils.async_utils import safe_ensure_future, safe_gather
-from hummingbot.core.utils.asyncio_throttle import Throttler
 from hummingbot.core.utils.estimate_fee import estimate_fee
 
 from hummingbot.connector.exchange.idex.idex_auth import IdexAuth, OrderTypeEnum, OrderSideEnum
@@ -33,7 +32,7 @@ from hummingbot.connector.exchange.idex.idex_utils import (
     ETH_GAS_LIMIT, BSC_GAS_LIMIT, HUMMINGBOT_GAS_LOOKUP,
 )
 from hummingbot.connector.exchange.idex.idex_resolve import (
-    get_idex_rest_url, get_idex_blockchain, set_domain
+    get_idex_rest_url, get_idex_blockchain, set_domain, get_throttler
 )
 from hummingbot.core.utils import eth_gas_station_lookup, async_ttl_cache
 from hummingbot.logger import HummingbotLogger
@@ -92,9 +91,9 @@ class IdexExchange(ExchangeBase):
         self._trading_rules_polling_task = None
         self._last_poll_timestamp = 0
         self._exchange_info = None  # stores info about the exchange. Periodically polled from GET /v1/exchange
-        self._throttler_public_endpoint = Throttler(rate_limit=(5, 1.0))  # rate_limit=(weight, t_period)
-        self._throttler_user_endpoint = Throttler(rate_limit=(10, 1.0))  # rate_limit=(weight, t_period)
-        self._throttler_trades_endpoint = Throttler(rate_limit=(10, 1.0))  # rate_limit=(weight, t_period)
+        # self._throttler_public_endpoint = Throttler(rate_limit=(2, 1.0))  # rate_limit=(weight, t_period)
+        # self._throttler_user_endpoint = Throttler(rate_limit=(3, 1.0))  # rate_limit=(weight, t_period)
+        # self._throttler_trades_endpoint = Throttler(rate_limit=(4, 1.0))  # rate_limit=(weight, t_period)
 
     @property
     def trading_rules(self) -> Dict[str, TradingRule]:
@@ -325,7 +324,7 @@ class IdexExchange(ExchangeBase):
 
     async def get_ping(self):
         """Requests status of current connection."""
-        async with self._throttler_public_endpoint.weighted_task(request_weight=1):
+        async with get_throttler().weighted_task(request_weight=1):
             rest_url = get_idex_rest_url()
             url = f"{rest_url}/v1/ping/"
             session: aiohttp.ClientSession = await self._http_client()
@@ -336,7 +335,7 @@ class IdexExchange(ExchangeBase):
 
     async def list_orders(self) -> List[Dict[str, Any]]:
         """Requests status of all active orders. Returns json data of all orders associated with wallet address"""
-        async with self._throttler_user_endpoint.weighted_task(request_weight=1):
+        async with get_throttler().weighted_task(request_weight=1):
             rest_url = get_idex_rest_url()
             url = f"{rest_url}/v1/orders"
             params = {
@@ -353,7 +352,7 @@ class IdexExchange(ExchangeBase):
 
     async def get_order(self, exchange_order_id: str) -> Dict[str, Any]:
         """Requests order information through API with exchange orderId. Returns json data with order details"""
-        async with self._throttler_user_endpoint.weighted_task(request_weight=1):
+        async with get_throttler().weighted_task(request_weight=1):
             rest_url = get_idex_rest_url()
             url = f"{rest_url}/v1/orders"
             params = {
@@ -374,7 +373,7 @@ class IdexExchange(ExchangeBase):
 
     async def post_order(self, params) -> Dict[str, Any]:
         """Posts an order request to the Idex API. Returns json data with order details"""
-        async with self._throttler_trades_endpoint.weighted_task(request_weight=1):
+        async with get_throttler().weighted_task(request_weight=1):
             rest_url = get_idex_rest_url()
             url = f"{rest_url}/v1/orders"
 
@@ -431,7 +430,7 @@ class IdexExchange(ExchangeBase):
         Deletes an order or all orders associated with a wallet from the Idex API.
         Returns json data with order id confirming deletion
         """
-        async with self._throttler_trades_endpoint.weighted_task(request_weight=1):
+        async with get_throttler().weighted_task(request_weight=1):
             rest_url = get_idex_rest_url()
             url = f"{rest_url}/v1/orders"
 
@@ -464,7 +463,7 @@ class IdexExchange(ExchangeBase):
 
     async def get_balances_from_api(self) -> List[Dict[str, Any]]:
         """Requests current balances of all assets through API. Returns json data with balance details"""
-        async with self._throttler_user_endpoint.weighted_task(request_weight=1):
+        async with get_throttler().weighted_task(request_weight=1):
             rest_url = get_idex_rest_url()
             url = f"{rest_url}/v1/balances"
             params = {
@@ -481,7 +480,7 @@ class IdexExchange(ExchangeBase):
 
     async def get_exchange_info_from_api(self) -> Dict[str, Any]:
         """Requests basic info about idex exchange. We are mostly interested in the gas price in gwei"""
-        async with self._throttler_public_endpoint.weighted_task(request_weight=1):
+        async with get_throttler().weighted_task(request_weight=1):
             rest_url = get_idex_rest_url()
             url = f"{rest_url}/v1/exchange"
             session: aiohttp.ClientSession = await self._http_client()
