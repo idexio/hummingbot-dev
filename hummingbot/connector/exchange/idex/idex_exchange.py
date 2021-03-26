@@ -21,6 +21,7 @@ from hummingbot.core.event.events import (
 )
 from hummingbot.core.network_iterator import NetworkStatus
 from hummingbot.core.utils.async_utils import safe_ensure_future, safe_gather
+from hummingbot.core.utils.asyncio_throttle import Throttler
 from hummingbot.core.utils.estimate_fee import estimate_fee
 
 from hummingbot.connector.exchange.idex.idex_auth import IdexAuth, OrderTypeEnum, OrderSideEnum
@@ -91,6 +92,9 @@ class IdexExchange(ExchangeBase):
         self._trading_rules_polling_task = None
         self._last_poll_timestamp = 0
         self._exchange_info = None  # stores info about the exchange. Periodically polled from GET /v1/exchange
+        self._throttler_public_endpoint = Throttler(rate_limit=(5, 1.0))  # rate_limit=(weight, t_period)
+        self._throttler_user_endpoint = Throttler(rate_limit=(10, 1.0))  # rate_limit=(weight, t_period)
+        self._throttler_trades_endpoint = Throttler(rate_limit=(10, 1.0))  # rate_limit=(weight, t_period)
 
     @property
     def trading_rules(self) -> Dict[str, TradingRule]:
@@ -321,168 +325,170 @@ class IdexExchange(ExchangeBase):
 
     async def get_ping(self):
         """Requests status of current connection."""
-
-        rest_url = get_idex_rest_url()
-        url = f"{rest_url}/v1/ping/"
-        session: aiohttp.ClientSession = await self._http_client()
-        async with session.get(url) as response:
-            if response.status != 200:
-                raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
-        return
+        async with self._throttler_public_endpoint.weighted_task(request_weight=1):
+            rest_url = get_idex_rest_url()
+            url = f"{rest_url}/v1/ping/"
+            session: aiohttp.ClientSession = await self._http_client()
+            async with session.get(url) as response:
+                if response.status != 200:
+                    raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
+            return
 
     async def list_orders(self) -> List[Dict[str, Any]]:
         """Requests status of all active orders. Returns json data of all orders associated with wallet address"""
-
-        rest_url = get_idex_rest_url()
-        url = f"{rest_url}/v1/orders"
-        params = {
-            "nonce": self._idex_auth.generate_nonce(),
-            "wallet": self._idex_auth.get_wallet_address()
-        }
-        auth_dict = self._idex_auth.generate_auth_dict(http_method="GET", url=url, params=params)
-        session: aiohttp.ClientSession = await self._http_client()
-        async with session.get(auth_dict["url"], headers=auth_dict["headers"]) as response:
-            if response.status != 200:
-                raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
-            data = await response.json()
-            return data
+        async with self._throttler_user_endpoint.weighted_task(request_weight=1):
+            rest_url = get_idex_rest_url()
+            url = f"{rest_url}/v1/orders"
+            params = {
+                "nonce": self._idex_auth.generate_nonce(),
+                "wallet": self._idex_auth.get_wallet_address()
+            }
+            auth_dict = self._idex_auth.generate_auth_dict(http_method="GET", url=url, params=params)
+            session: aiohttp.ClientSession = await self._http_client()
+            async with session.get(auth_dict["url"], headers=auth_dict["headers"]) as response:
+                if response.status != 200:
+                    raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
+                data = await response.json()
+                return data
 
     async def get_order(self, exchange_order_id: str) -> Dict[str, Any]:
         """Requests order information through API with exchange orderId. Returns json data with order details"""
-
-        rest_url = get_idex_rest_url()
-        url = f"{rest_url}/v1/orders"
-        params = {
-            "nonce": self._idex_auth.generate_nonce(),
-            "wallet": self._idex_auth.get_wallet_address(),
-            "orderId": exchange_order_id
-        }
-        auth_dict = self._idex_auth.generate_auth_dict(http_method="GET", url=url, params=params)
-        session: aiohttp.ClientSession = await self._http_client()
-        async with session.get(auth_dict["url"], headers=auth_dict["headers"]) as response:
-            if response.status != 200:
-                if DEBUG:
-                    self.logger().error(f"<<<<< get_order(exchange_order_id:{exchange_order_id}) error {response}")
+        async with self._throttler_user_endpoint.weighted_task(request_weight=1):
+            rest_url = get_idex_rest_url()
+            url = f"{rest_url}/v1/orders"
+            params = {
+                "nonce": self._idex_auth.generate_nonce(),
+                "wallet": self._idex_auth.get_wallet_address(),
+                "orderId": exchange_order_id
+            }
+            auth_dict = self._idex_auth.generate_auth_dict(http_method="GET", url=url, params=params)
+            session: aiohttp.ClientSession = await self._http_client()
+            async with session.get(auth_dict["url"], headers=auth_dict["headers"]) as response:
+                if response.status != 200:
+                    if DEBUG:
+                        self.logger().error(f"<<<<< get_order(exchange_order_id:{exchange_order_id}) error {response}")
+                    data = await response.json()
+                    raise IOError(f"Error fetching data from {url}, {auth_dict['url']}. HTTP status is {response.status}. {data}")
                 data = await response.json()
-                raise IOError(f"Error fetching data from {url}, {auth_dict['url']}. HTTP status is {response.status}. {data}")
-            data = await response.json()
-            return data
+                return data
 
     async def post_order(self, params) -> Dict[str, Any]:
         """Posts an order request to the Idex API. Returns json data with order details"""
+        async with self._throttler_trades_endpoint.weighted_task(request_weight=1):
+            rest_url = get_idex_rest_url()
+            url = f"{rest_url}/v1/orders"
 
-        rest_url = get_idex_rest_url()
-        url = f"{rest_url}/v1/orders"
+            params.update({
+                "nonce": self._idex_auth.generate_nonce(),
+                "wallet": self._idex_auth.get_wallet_address()
+            })
 
-        params.update({
-            "nonce": self._idex_auth.generate_nonce(),
-            "wallet": self._idex_auth.get_wallet_address()
-        })
+            if params["type"] == "market":
+                order_type = OrderTypeEnum.market
+            elif params["type"] == "limit":
+                order_type = OrderTypeEnum.limit
+            elif params["type"] == "limitMaker":
+                order_type = OrderTypeEnum.limitMaker
 
-        if params["type"] == "market":
-            order_type = OrderTypeEnum.market
-        elif params["type"] == "limit":
-            order_type = OrderTypeEnum.limit
-        elif params["type"] == "limitMaker":
-            order_type = OrderTypeEnum.limitMaker
+            if params["side"] == "buy":
+                trade_type = OrderSideEnum.buy
+            elif params["side"] == "sell":
+                trade_type = OrderSideEnum.sell
 
-        if params["side"] == "buy":
-            trade_type = OrderSideEnum.buy
-        elif params["side"] == "sell":
-            trade_type = OrderSideEnum.sell
+            signature_parameters = self._idex_auth.build_signature_params_for_order(
+                # TODO: Did not include: stop_price, time_in_force, and selftrade_prevention. Add later as required.
+                market=params["market"],
+                order_type=order_type,
+                order_side=trade_type,
+                order_quantity=params["quantity"],
+                quantity_in_quote=False,
+                price=params["price"],
+                client_order_id=params["clientOrderId"],
+            )
+            wallet_signature = self._idex_auth.wallet_sign(signature_parameters)
 
-        signature_parameters = self._idex_auth.build_signature_params_for_order(
-            # TODO Brian: Did not include: stop_price, time_in_force, and selftrade_prevention. Add later as required.
-            market=params["market"],
-            order_type=order_type,
-            order_side=trade_type,
-            order_quantity=params["quantity"],
-            quantity_in_quote=False,
-            price=params["price"],
-            client_order_id=params["clientOrderId"],
-        )
-        wallet_signature = self._idex_auth.wallet_sign(signature_parameters)
+            body = {
+                "parameters": params,
+                "signature": wallet_signature
+            }
+            if DEBUG:
+                self.logger().info(f"post_order body: {body}")
 
-        body = {
-            "parameters": params,
-            "signature": wallet_signature
-        }
-        if DEBUG:
-            self.logger().info(f"post_order body: {body}")
-
-        auth_dict = self._idex_auth.generate_auth_dict_for_post(url=url, body=body)
-        session: aiohttp.ClientSession = await self._http_client()
-        async with session.post(auth_dict["url"], data=auth_dict["body"], headers=auth_dict["headers"]) as response:
-            if response.status != 200:
-                if DEBUG:
-                    self.logger().warning(f'<<<<<<< session.post response: {response}')
+            auth_dict = self._idex_auth.generate_auth_dict_for_post(url=url, body=body)
+            session: aiohttp.ClientSession = await self._http_client()
+            async with session.post(auth_dict["url"], data=auth_dict["body"], headers=auth_dict["headers"]) as response:
+                if response.status != 200:
+                    if DEBUG:
+                        self.logger().warning(f'<<<<<<< session.post response: {response}')
+                    data = await response.json()
+                    raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}."
+                                  f"Data is: {data}")
                 data = await response.json()
-                raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}."
-                              f"Data is: {data}")
-            data = await response.json()
-            return data
+                return data
 
     async def delete_order(self, trading_pair: str, client_order_id: str):
         """
         Deletes an order or all orders associated with a wallet from the Idex API.
         Returns json data with order id confirming deletion
         """
+        async with self._throttler_trades_endpoint.weighted_task(request_weight=1):
+            rest_url = get_idex_rest_url()
+            url = f"{rest_url}/v1/orders"
 
-        rest_url = get_idex_rest_url()
-        url = f"{rest_url}/v1/orders"
+            params = {
+                "nonce": self._idex_auth.generate_nonce(),
+                "wallet": self._idex_auth.get_wallet_address(),
+                "orderId": f"client:{client_order_id}",
+            }
+            signature_parameters = self._idex_auth.build_signature_params_for_cancel_order(
+                # potential value: client_order_id=f"client:{order_id}"
+                client_order_id=f"client:{client_order_id}",
+            )
+            wallet_signature = self._idex_auth.wallet_sign(signature_parameters)
 
-        params = {
-            "nonce": self._idex_auth.generate_nonce(),
-            "wallet": self._idex_auth.get_wallet_address(),
-            "orderId": f"client:{client_order_id}",
-        }
-        signature_parameters = self._idex_auth.build_signature_params_for_cancel_order(
-            # potential value: client_order_id=f"client:{order_id}"
-            client_order_id=f"client:{client_order_id}",
-        )
-        wallet_signature = self._idex_auth.wallet_sign(signature_parameters)
+            body = {
+                "parameters": params,
+                "signature": wallet_signature
+            }
 
-        body = {
-            "parameters": params,
-            "signature": wallet_signature
-        }
-
-        auth_dict = self._idex_auth.generate_auth_dict_for_delete(url=url, body=body, wallet_signature=wallet_signature)
-        session: aiohttp.ClientSession = await self._http_client()
-        if DEBUG:
-            self.logger().info(f"Cancelling order {client_order_id} for {trading_pair}.")
-        async with session.delete(auth_dict["url"], data=auth_dict["body"], headers=auth_dict["headers"]) as response:
-            if response.status != 200:
+            auth_dict = self._idex_auth.generate_auth_dict_for_delete(url=url, body=body, wallet_signature=wallet_signature)
+            session: aiohttp.ClientSession = await self._http_client()
+            if DEBUG:
+                self.logger().info(f"Cancelling order {client_order_id} for {trading_pair}.")
+            async with session.delete(auth_dict["url"], data=auth_dict["body"], headers=auth_dict["headers"]) as response:
+                if response.status != 200:
+                    data = await response.json()
+                    raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {data}")
                 data = await response.json()
-                raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {data}")
-            data = await response.json()
-            return data
+                return data
 
     async def get_balances_from_api(self) -> List[Dict[str, Any]]:
         """Requests current balances of all assets through API. Returns json data with balance details"""
-        rest_url = get_idex_rest_url()
-        url = f"{rest_url}/v1/balances"
-        params = {
-            "nonce": self._idex_auth.generate_nonce(),
-            "wallet": self._idex_auth.get_wallet_address(),
-        }
-        auth_dict = self._idex_auth.generate_auth_dict(http_method="GET", url=url, params=params)
-        session: aiohttp.ClientSession = await self._http_client()
-        async with session.get(auth_dict["url"], headers=auth_dict["headers"]) as response:
-            if response.status != 200:
-                raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
-            data = await response.json()
-            return data
+        async with self._throttler_user_endpoint.weighted_task(request_weight=1):
+            rest_url = get_idex_rest_url()
+            url = f"{rest_url}/v1/balances"
+            params = {
+                "nonce": self._idex_auth.generate_nonce(),
+                "wallet": self._idex_auth.get_wallet_address(),
+            }
+            auth_dict = self._idex_auth.generate_auth_dict(http_method="GET", url=url, params=params)
+            session: aiohttp.ClientSession = await self._http_client()
+            async with session.get(auth_dict["url"], headers=auth_dict["headers"]) as response:
+                if response.status != 200:
+                    raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. {response}")
+                data = await response.json()
+                return data
 
     async def get_exchange_info_from_api(self) -> Dict[str, Any]:
         """Requests basic info about idex exchange. We are mostly interested in the gas price in gwei"""
-        rest_url = get_idex_rest_url()
-        url = f"{rest_url}/v1/exchange"
-        session: aiohttp.ClientSession = await self._http_client()
-        async with session.get(url) as response:
-            if response.status != 200:
-                raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}")
-            return await response.json()
+        async with self._throttler_public_endpoint.weighted_task(request_weight=1):
+            rest_url = get_idex_rest_url()
+            url = f"{rest_url}/v1/exchange"
+            session: aiohttp.ClientSession = await self._http_client()
+            async with session.get(url) as response:
+                if response.status != 200:
+                    raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}")
+                return await response.json()
 
     async def _create_order(self,
                             trade_type: TradeType,

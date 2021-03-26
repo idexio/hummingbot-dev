@@ -19,6 +19,7 @@ import ujson
 import websockets
 from websockets.exceptions import ConnectionClosed
 
+from hummingbot.core.utils.asyncio_throttle import Throttler
 from hummingbot.logger import HummingbotLogger
 from hummingbot.core.data_type.order_book_tracker_entry import OrderBookTrackerEntry
 from hummingbot.core.data_type.order_book_message import OrderBookMessage
@@ -47,11 +48,19 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
     _iaobds_logger: Optional[HummingbotLogger] = None
 
+    _throttler_public_endpoint: Optional[Throttler] = None
+
     @classmethod
     def logger(cls) -> HummingbotLogger:
         if cls._iaobds_logger is None:
             cls._iaobds_logger = logging.getLogger(__name__)
         return cls._iaobds_logger
+
+    @classmethod
+    def get_throttler(cls) -> Throttler:
+        if cls._throttler_public_endpoint is None:
+            cls._throttler_public_endpoint = Throttler(rate_limit=(5, 1.0))  # rate_limit=(weight, t_period)
+        return cls._throttler_public_endpoint
 
     def __init__(self, trading_pairs: List[str]):
         super().__init__(trading_pairs)
@@ -65,16 +74,17 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
         results = await safe_gather(*tasks)
         return {t_pair: result for t_pair, result in zip(trading_pairs, results)}
 
-    @staticmethod
-    async def get_last_traded_price(trading_pair: str, base_url: str = "https://api-eth.idex.io") -> float:
-        async with aiohttp.ClientSession() as client:
-            resp = await client.get(f"{base_url}/v1/trades/?market={trading_pair}")
-            resp_json = await resp.json()
-            # based on previous GET requests to the Idex trade URL, the most recent trade is located at the -1 index
-            # of the returned list of trades. This assumes pop() on the returned list is the optimal solution for
-            # retrieving the latest trade.
-            last_trade = resp_json[-1]
-            return float(last_trade["price"])
+    @classmethod
+    async def get_last_traded_price(cls, trading_pair: str, base_url: str = "https://api-eth.idex.io") -> float:
+        async with cls.get_throttler().weighted_task(request_weight=1):
+            async with aiohttp.ClientSession() as client:
+                resp = await client.get(f"{base_url}/v1/trades/?market={trading_pair}")
+                resp_json = await resp.json()
+                # based on previous GET requests to the Idex trade URL, the most recent trade is located at the -1 index
+                # of the returned list of trades. This assumes pop() on the returned list is the optimal solution for
+                # retrieving the latest trade.
+                last_trade = resp_json[-1]
+                return float(last_trade["price"])
 
     @classmethod
     @cachetools.func.ttl_cache(ttl=10)
@@ -89,24 +99,25 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
     @staticmethod
     async def fetch_trading_pairs(domain=None) -> List[str]:
-        try:
-            async with aiohttp.ClientSession() as client:
-                # ensure IDEX_REST_URL has appropriate blockchain imported (ETH or BSC)
-                base_url: str = get_idex_rest_url(domain=domain)
-                async with client.get(f"{base_url}/v1/tickers", timeout=5) as response:
-                    if response.status == 200:
-                        markets = await response.json()
-                        raw_trading_pairs: List[str] = list(map(lambda details: details.get('market'), markets))
-                        trading_pair_list: List[str] = []
-                        for raw_trading_pair in raw_trading_pairs:
-                            trading_pair_list.append(raw_trading_pair)
-                        return trading_pair_list
+        async with IdexAPIOrderBookDataSource.get_throttler().weighted_task(request_weight=1):
+            try:
+                async with aiohttp.ClientSession() as client:
+                    # ensure IDEX_REST_URL has appropriate blockchain imported (ETH or BSC)
+                    base_url: str = get_idex_rest_url(domain=domain)
+                    async with client.get(f"{base_url}/v1/tickers", timeout=5) as response:
+                        if response.status == 200:
+                            markets = await response.json()
+                            raw_trading_pairs: List[str] = list(map(lambda details: details.get('market'), markets))
+                            trading_pair_list: List[str] = []
+                            for raw_trading_pair in raw_trading_pairs:
+                                trading_pair_list.append(raw_trading_pair)
+                            return trading_pair_list
 
-        except Exception:
-            # Do nothing if request fails. No autocomplete for trading pairs.
-            pass
+            except Exception:
+                # Do nothing if request fails. No autocomplete for trading pairs.
+                pass
 
-        return []
+            return []
 
     @staticmethod
     async def get_snapshot(client: aiohttp.ClientSession, trading_pair: str) -> Dict[str, Any]:
@@ -114,31 +125,33 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
         Fetches order book snapshot for a particular trading pair from the rest API
         :returns: Response from the rest API
         """
-        # idex level 2 order book is sufficient to provide required data
-        base_url: str = get_idex_rest_url()
-        product_order_book_url: str = f"{base_url}/v1/orderbook?market={trading_pair}&level=2"
-        async with client.get(product_order_book_url) as response:
-            response: aiohttp.ClientResponse = response
-            if response.status != 200:
-                raise IOError(f"Error fetching IDEX market snapshot for {trading_pair}."
-                              f"HTTP status is {response.status}.")
-            data: Dict[str, Any] = await response.json()
-            return data
+        async with IdexAPIOrderBookDataSource.get_throttler().weighted_task(request_weight=1):
+            # idex level 2 order book is sufficient to provide required data
+            base_url: str = get_idex_rest_url()
+            product_order_book_url: str = f"{base_url}/v1/orderbook?market={trading_pair}&level=2"
+            async with client.get(product_order_book_url) as response:
+                response: aiohttp.ClientResponse = response
+                if response.status != 200:
+                    raise IOError(f"Error fetching IDEX market snapshot for {trading_pair}."
+                                  f"HTTP status is {response.status}.")
+                data: Dict[str, Any] = await response.json()
+                return data
 
     async def get_new_order_book(self, trading_pair: str) -> OrderBook:
-        async with aiohttp.ClientSession() as client:
-            snapshot: Dict[str, Any] = await self.get_snapshot(client, trading_pair)
-            snapshot_timestamp: float = time.time()
-            snapshot_msg: OrderBookMessage = IdexOrderBook.snapshot_message_from_exchange(
-                snapshot,
-                snapshot_timestamp,
-                metadata={"trading_pair": trading_pair}
-            )
-            active_order_tracker: IdexActiveOrderTracker = IdexActiveOrderTracker()
-            bids, asks = active_order_tracker.convert_snapshot_message_to_order_book_row(snapshot_msg)
-            order_book = self.order_book_create_function()
-            order_book.apply_snapshot(bids, asks, snapshot_msg.update_id)
-            return order_book
+        async with self.get_throttler().weighted_task(request_weight=1):
+            async with aiohttp.ClientSession() as client:
+                snapshot: Dict[str, Any] = await self.get_snapshot(client, trading_pair)
+                snapshot_timestamp: float = time.time()
+                snapshot_msg: OrderBookMessage = IdexOrderBook.snapshot_message_from_exchange(
+                    snapshot,
+                    snapshot_timestamp,
+                    metadata={"trading_pair": trading_pair}
+                )
+                active_order_tracker: IdexActiveOrderTracker = IdexActiveOrderTracker()
+                bids, asks = active_order_tracker.convert_snapshot_message_to_order_book_row(snapshot_msg)
+                order_book = self.order_book_create_function()
+                order_book.apply_snapshot(bids, asks, snapshot_msg.update_id)
+                return order_book
 
     async def get_tracking_pairs(self) -> Dict[str, OrderBookTrackerEntry]:
         """
@@ -147,44 +160,45 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
         returned by `self.fetch_trading_pairs`
         :returns: A dictionary of order book trackers for each trading pair
         """
-        # Get the currently active markets
-        async with aiohttp.ClientSession() as client:
-            trading_pairs: List[str] = self._trading_pairs
-            retval: Dict[str, OrderBookTrackerEntry] = {}
+        async with self.get_throttler().weighted_task(request_weight=1):
+            # Get the currently active markets
+            async with aiohttp.ClientSession() as client:
+                trading_pairs: List[str] = self._trading_pairs
+                retval: Dict[str, OrderBookTrackerEntry] = {}
 
-            number_of_pairs: int = len(trading_pairs)
-            for index, trading_pair in enumerate(trading_pairs):
-                try:
-                    snapshot: Dict[str, Any] = await self.get_snapshot(client, trading_pair)
-                    snapshot_timestamp: float = time.time()
-                    snapshot_msg: OrderBookMessage = IdexOrderBook.snapshot_message_from_exchange(
-                        snapshot,
-                        snapshot_timestamp,
-                        metadata={"trading_pair": trading_pair}
-                    )
-                    order_book: OrderBook = self.order_book_create_function()
-                    active_order_tracker: IdexActiveOrderTracker = IdexActiveOrderTracker()
-                    bids, asks = active_order_tracker.convert_snapshot_message_to_order_book_row(snapshot_msg)
-                    order_book.apply_snapshot(bids, asks, snapshot_msg.update_id)
+                number_of_pairs: int = len(trading_pairs)
+                for index, trading_pair in enumerate(trading_pairs):
+                    try:
+                        snapshot: Dict[str, Any] = await self.get_snapshot(client, trading_pair)
+                        snapshot_timestamp: float = time.time()
+                        snapshot_msg: OrderBookMessage = IdexOrderBook.snapshot_message_from_exchange(
+                            snapshot,
+                            snapshot_timestamp,
+                            metadata={"trading_pair": trading_pair}
+                        )
+                        order_book: OrderBook = self.order_book_create_function()
+                        active_order_tracker: IdexActiveOrderTracker = IdexActiveOrderTracker()
+                        bids, asks = active_order_tracker.convert_snapshot_message_to_order_book_row(snapshot_msg)
+                        order_book.apply_snapshot(bids, asks, snapshot_msg.update_id)
 
-                    retval[trading_pair] = IdexOrderBookTrackerEntry(
-                        trading_pair,
-                        snapshot_timestamp,
-                        order_book,
-                        active_order_tracker
-                    )
-                    self.logger().info(f"Initialized order book for {trading_pair}."
-                                       f"{index + 1}/{number_of_pairs} completed.")
-                    await asyncio.sleep(0.6)
-                except IOError:
-                    self.logger().network(
-                        f"Error getting snapshot for {trading_pair}.",
-                        exc_info=True,
-                        app_warning_msg=f"Error getting snapshot for {trading_pair}. Check network connection."
-                    )
-                except Exception:
-                    self.logger().error(f"Error initializing order book for {trading_pair}.", exc_info=True)
-            return retval
+                        retval[trading_pair] = IdexOrderBookTrackerEntry(
+                            trading_pair,
+                            snapshot_timestamp,
+                            order_book,
+                            active_order_tracker
+                        )
+                        self.logger().info(f"Initialized order book for {trading_pair}."
+                                           f"{index + 1}/{number_of_pairs} completed.")
+                        await asyncio.sleep(0.6)
+                    except IOError:
+                        self.logger().network(
+                            f"Error getting snapshot for {trading_pair}.",
+                            exc_info=True,
+                            app_warning_msg=f"Error getting snapshot for {trading_pair}. Check network connection."
+                        )
+                    except Exception:
+                        self.logger().error(f"Error initializing order book for {trading_pair}.", exc_info=True)
+                return retval
 
     async def _inner_messages(self,
                               ws: websockets.WebSocketClientProtocol) -> AsyncIterable[str]:
@@ -349,6 +363,7 @@ class IdexAPIOrderBookDataSource(OrderBookTrackerDataSource):
     async def listen_for_order_book_snapshots(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
         while True:
             try:
+                # todo alf: throttle this too? nuanced!
                 async with aiohttp.ClientSession() as client:
                     for trading_pair in self._trading_pairs:
                         try:
