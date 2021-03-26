@@ -135,7 +135,7 @@ class IdexExchange(ExchangeBase):
     def limit_orders(self) -> List[LimitOrder]:
         """Returns a list of active limit orders being tracked"""
         return [
-            self._in_flight_orders.to_limit_order()
+            in_flight_order.to_limit_order()
             for in_flight_order in self._in_flight_orders.values()
         ]
 
@@ -289,7 +289,6 @@ class IdexExchange(ExchangeBase):
             if tracked_order is None:
                 raise ValueError(f"Failed to cancel order - {client_order_id}. Order not found.")
             tracked_order = self._in_flight_orders.get(client_order_id)
-            await asyncio.sleep(1)
             exchange_order_id = await tracked_order.get_exchange_order_id()
             cancelled_id = await self.delete_order(trading_pair, client_order_id)
             format_cancelled_id = cancelled_id[0].get("orderId")
@@ -303,6 +302,14 @@ class IdexExchange(ExchangeBase):
                                        self.current_timestamp,
                                        client_order_id))
                 tracked_order.cancelled_event.set()
+                return client_order_id
+        except IOError as e:
+            if "order not found" in str(e):
+                # The order was never there to begin with. So cancelling it is a no-op but semantically successful.
+                self.logger().info(f"The order {client_order_id} does not exist on Idex. No cancellation needed.")
+                self.c_stop_tracking_order(client_order_id)
+                self.c_trigger_event(self.MARKET_ORDER_CANCELLED_EVENT_TAG,
+                                     OrderCancelledEvent(self._current_timestamp, client_order_id))
                 return client_order_id
         except asyncio.CancelledError:
             raise

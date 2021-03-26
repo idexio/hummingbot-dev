@@ -19,8 +19,8 @@ _IDEX_WS_FEED_PROD_ETH = "wss://websocket-eth.idex.io/v1"
 _IDEX_WS_FEED_PROD_BSC = "wss://websocket-bsc.idex.io/v1"
 
 
-_IDEX_BLOCKCHAIN = None
-_IS_IDEX_SANDBOX = None
+_IDEX_BLOCKCHAIN = "ETH"
+_IS_IDEX_SANDBOX = True
 
 
 def set_domain(domain):
