@@ -175,4 +175,4 @@ OTHER_DOMAINS_KEYS = {
 }
 
 
-DEBUG = True
+DEBUG = False
