@@ -308,7 +308,7 @@ class IdexExchange(ExchangeBase):
                 # The order was never there to begin with. So cancelling it is a no-op but semantically successful.
                 self.logger().info(f"The order {client_order_id} does not exist on Idex. No cancellation needed.")
                 self.stop_tracking_order(client_order_id)
-                self.trigger_event(self.MARKET_ORDER_CANCELLED_EVENT_TAG,
+                self.trigger_event(self.MarketEvent.OrderCancelled,
                                    OrderCancelledEvent(self._current_timestamp, client_order_id))
                 return client_order_id
         except asyncio.CancelledError:
@@ -353,6 +353,9 @@ class IdexExchange(ExchangeBase):
     async def get_order(self, exchange_order_id: str) -> Dict[str, Any]:
         """Requests order information through API with exchange orderId. Returns json data with order details"""
         async with get_throttler().weighted_task(request_weight=1):
+            if DEBUG:
+                self.logger().warning(f'<|<|<|<|< entering get_order({exchange_order_id})')
+
             rest_url = get_idex_rest_url()
             url = f"{rest_url}/v1/orders"
             params = {
@@ -364,9 +367,12 @@ class IdexExchange(ExchangeBase):
             session: aiohttp.ClientSession = await self._http_client()
             async with session.get(auth_dict["url"], headers=auth_dict["headers"]) as response:
                 if response.status != 200:
-                    if DEBUG:
-                        self.logger().error(f"<<<<< get_order(exchange_order_id:{exchange_order_id}) error {response}")
                     data = await response.json()
+                    if DEBUG:
+                        self.logger().error(f"<<<<< get_order(exchange_order_id:{exchange_order_id}) error {response}. data: {data}")
+                        orders_resp = await self.list_orders()  # todo alf: remove this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                        self.logger().warning(
+                            f"<|<|<|<|< list_orders() error {response}. data: {orders_resp}")
                     raise IOError(f"Error fetching data from {url}, {auth_dict['url']}. HTTP status is {response.status}. {data}")
                 data = await response.json()
                 return data
@@ -423,6 +429,8 @@ class IdexExchange(ExchangeBase):
                     raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}."
                                   f"Data is: {data}")
                 data = await response.json()
+                if DEBUG:
+                    self.logger().warning(f'<|<|<|<|< post_order returned: {data}')
                 return data
 
     async def delete_order(self, trading_pair: str, client_order_id: str):
@@ -530,23 +538,30 @@ class IdexExchange(ExchangeBase):
             "selfTradePrevention": "dc"
         }
 
-        self.start_tracking_order(order_id,
-                                  "",
-                                  trading_pair,
-                                  trade_type,
-                                  price,
-                                  amount,
-                                  order_type
-                                  )
+        # self.start_tracking_order(order_id,
+        #                           "",
+        #                           trading_pair,
+        #                           trade_type,
+        #                           price,
+        #                           amount,
+        #                           order_type
+        #                           )
         try:
             order_result = await self.post_order(api_params)
+            self.start_tracking_order(order_id,
+                                      order_result["orderId"],
+                                      trading_pair,
+                                      trade_type,
+                                      price,
+                                      amount,
+                                      order_type
+                                      )
             exchange_order_id = order_result["orderId"]
             tracked_order = self._in_flight_orders.get(order_id)
-            if tracked_order is not None:
-                if DEBUG:
-                    self.logger().info(f"Created {order_type.name} {trade_type.name} order {order_id} for "
-                                       f"{amount} {trading_pair}.")
-                tracked_order.update_exchange_order_id(exchange_order_id)
+            if DEBUG:
+                self.logger().info(f"Created {order_type.name} {trade_type.name} order {order_id} for "
+                                   f"{amount} {trading_pair}.")
+            tracked_order.update_exchange_order_id(exchange_order_id)
             event_tag = MarketEvent.BuyOrderCreated if trade_type is TradeType.BUY else MarketEvent.SellOrderCreated
             event_class = BuyOrderCreatedEvent if trade_type is TradeType.BUY else SellOrderCreatedEvent
             self.trigger_event(event_tag,
@@ -616,7 +631,6 @@ class IdexExchange(ExchangeBase):
                     self._update_order_status(),
                     self._update_exchange_info()
                 )
-                self._last_poll_timestamp = self.current_timestamp
             except asyncio.CancelledError:
                 raise
             except Exception as e:
@@ -626,6 +640,8 @@ class IdexExchange(ExchangeBase):
                                       app_warning_msg="Could not fetch account updates from Idex. "
                                                       "Check API key and network connection.")
                 await asyncio.sleep(0.5)
+            finally:
+                self._last_poll_timestamp = self.current_timestamp
 
     def get_fee(self,
                 base_currency: str,
@@ -670,17 +686,18 @@ class IdexExchange(ExchangeBase):
                 tasks.append(self.get_order(order_id))
             self.logger().debug(f"Polling for order status updates of {len(tasks)} orders.")
             update_results = await safe_gather(*tasks, return_exceptions=True)
-            # todo alf: more work needed here ??
-            order_id_exception = [(o.client_order_id, r) for o, r in zip(tracked_orders, update_results)
-                                  if isinstance(r, Exception)]
-            for update_result in update_results:
-                if isinstance(update_result, Exception):
-                    self.logger().error(f"<<<< exception in _update_order_status get_order subtask: {update_result}")
+            tracked_order_result = [(o, r) for o, r in zip(tracked_orders, update_results)]
+            for tracked_order, result in tracked_order_result:
+                if isinstance(result, Exception):
+                    self.logger().error(f"<<<< exception in _update_order_status get_order subtask: {result}")
+                    # remove failed order from tracked_orders
+                    self.stop_tracking_order(tracked_order.client_order_id)
+                    self.logger().error(f'Stopped tracking order: {tracked_order.client_order_id} wth failed get_order')
+                    self.trigger_event(MarketEvent.OrderFailure, MarketOrderFailureEvent(
+                        self.current_timestamp, tracked_order.client_order_id, tracked_order.order_type))
                     continue
-                await self._process_fill_message(update_result)
-                self._process_order_message(update_result)
-            if order_id_exception:
-                raise Exception(f"<<<< _update_order_status combined order_id_exception tuple: {order_id_exception}")
+                await self._process_fill_message(result)
+                self._process_order_message(result)
 
     def _process_order_message(self, order_msg: Dict[str, Any]):
         """
