@@ -292,9 +292,9 @@ class IdexExchange(ExchangeBase):
             if tracked_order is None:
                 raise ValueError(f"Failed to cancel order - {client_order_id}. Order not found.")
             exchange_order_id = await tracked_order.get_exchange_order_id()
-            cancelled_id_list = await self.delete_order(trading_pair, client_order_id)
-            cancelled_ids = [o["orderId"] for o in cancelled_id_list if o.get("orderId") is not None]
-            if exchange_order_id in cancelled_ids:
+            cancelled_id = await self.delete_order(trading_pair, client_order_id)
+            format_cancelled_id = cancelled_id[0].get("orderId")
+            if exchange_order_id == format_cancelled_id:
                 self.logger().info(f"Successfully cancelled order {client_order_id}.")
                 self.stop_tracking_order(client_order_id)
                 self.trigger_event(MarketEvent.OrderCancelled,
