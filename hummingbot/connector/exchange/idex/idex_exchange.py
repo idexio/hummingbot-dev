@@ -292,9 +292,9 @@ class IdexExchange(ExchangeBase):
             if tracked_order is None:
                 raise ValueError(f"Failed to cancel order - {client_order_id}. Order not found.")
             exchange_order_id = await tracked_order.get_exchange_order_id()
-            cancelled_id = await self.delete_order(trading_pair, client_order_id)
-            format_cancelled_id = cancelled_id[0].get("orderId")
-            if exchange_order_id == format_cancelled_id:
+            cancelled_id_list = await self.delete_order(trading_pair, client_order_id)
+            cancelled_ids = [o["orderId"] for o in cancelled_id_list if o.get("orderId") is not None]
+            if exchange_order_id in cancelled_ids:
                 self.logger().info(f"Successfully cancelled order {client_order_id}.")
                 self.stop_tracking_order(client_order_id)
                 self.trigger_event(MarketEvent.OrderCancelled,
@@ -350,7 +350,7 @@ class IdexExchange(ExchangeBase):
                 data = await response.json()
                 return data
 
-    async def get_order(self, client_order_id: str) -> Dict[str, Any]:
+    async def get_order(self, exchange_order_id: str) -> Dict[str, Any]:
         """Requests order information through API with client order Id. Returns json data with order details"""
         async with get_throttler().weighted_task(request_weight=1):
             rest_url = get_idex_rest_url()
@@ -358,14 +358,14 @@ class IdexExchange(ExchangeBase):
             params = {
                 "nonce": self._idex_auth.generate_nonce(),
                 "wallet": self._idex_auth.get_wallet_address(),
-                "orderId": f"client:{client_order_id}",
+                "orderId": f"client:{exchange_order_id}"
             }
             auth_dict = self._idex_auth.generate_auth_dict(http_method="GET", url=url, params=params)
             session: aiohttp.ClientSession = await self._http_client()
             async with session.get(auth_dict["url"], headers=auth_dict["headers"]) as response:
                 if response.status != 200:
                     if DEBUG:
-                        self.logger().error(f"<<<<< get_order(client_order_id:{client_order_id}) error {response}")
+                        self.logger().error(f"<<<<< get_order(exchange_order_id:{exchange_order_id}) error {response}")
                     data = await response.json()
                     raise IOError(f"Error fetching data from {url}, {auth_dict['url']}. HTTP status is {response.status}. {data}")
                 data = await response.json()
@@ -666,8 +666,8 @@ class IdexExchange(ExchangeBase):
             tracked_orders = list(self._in_flight_orders.values())
             tasks = []
             for tracked_order in tracked_orders:
-                client_order_id = tracked_order.client_order_id
-                tasks.append(self.get_order(client_order_id))
+                exchange_order_id = tracked_order.exchange_order_id
+                tasks.append(self.get_order(exchange_order_id))
             self.logger().debug(f"Polling for order status updates of {len(tasks)} orders.")
             update_results = await safe_gather(*tasks, return_exceptions=True)
             # todo alf: more work needed here ??
