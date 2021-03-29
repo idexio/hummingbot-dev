@@ -273,7 +273,7 @@ class IdexExchange(ExchangeBase):
         Cancel an order. This function returns immediately.
         To get the cancellation result, you'll have to wait for OrderCancelledEvent.
         :param trading_pair: The market (e.g. BTC-USDT) of the order.
-        :param order_id: The internal order id (also called client_order_id)
+        :param client_order_id: The internal order id
         """
 
         order_cancellation = safe_ensure_future(self._execute_cancel(trading_pair, client_order_id))
@@ -284,25 +284,25 @@ class IdexExchange(ExchangeBase):
         Executes order cancellation process by first calling cancel-order API. The API result doesn't confirm whether
         the cancellation is successful, it simply states it receives the request.
         :param trading_pair: The market trading pair
-        :param order_id: The internal order id
+        :param client_order_id: The internal order id
         order.last_state to change to CANCELED
         """
         try:
             tracked_order = self._in_flight_orders.get(client_order_id)
             if tracked_order is None:
                 raise ValueError(f"Failed to cancel order - {client_order_id}. Order not found.")
-            exchange_order_id = await tracked_order.get_exchange_order_id()
-            cancelled_id_list = await self.delete_order(trading_pair, client_order_id)
-            cancelled_ids = [o["orderId"] for o in cancelled_id_list if o.get("orderId") is not None]
-            if exchange_order_id in cancelled_ids:
-                self.logger().info(f"Successfully cancelled order {client_order_id}.")
-                self.stop_tracking_order(client_order_id)
-                self.trigger_event(MarketEvent.OrderCancelled,
-                                   OrderCancelledEvent(
-                                       self.current_timestamp,
-                                       client_order_id))
-                tracked_order.cancelled_event.set()
-                return client_order_id
+            exchange_order_id = tracked_order.exchange_order_id
+            cancelled_id = await self.delete_order(trading_pair, client_order_id)
+            if cancelled_id:
+                if exchange_order_id == cancelled_id[0].get("orderId"):
+                    self.logger().info(f"Successfully cancelled order {client_order_id}.")
+                    self.stop_tracking_order(client_order_id)
+                    self.trigger_event(MarketEvent.OrderCancelled,
+                                       OrderCancelledEvent(
+                                           self.current_timestamp,
+                                           client_order_id))
+                    tracked_order.cancelled_event.set()
+                    return client_order_id
         except IOError as e:
             if "order not found" in str(e):
                 # The order was never there to begin with. So cancelling it is a no-op but semantically successful.
@@ -358,7 +358,7 @@ class IdexExchange(ExchangeBase):
             params = {
                 "nonce": self._idex_auth.generate_nonce(),
                 "wallet": self._idex_auth.get_wallet_address(),
-                "orderId": f"client:{exchange_order_id}"
+                "orderId": exchange_order_id
             }
             auth_dict = self._idex_auth.generate_auth_dict(http_method="GET", url=url, params=params)
             session: aiohttp.ClientSession = await self._http_client()
@@ -667,7 +667,8 @@ class IdexExchange(ExchangeBase):
             tasks = []
             for tracked_order in tracked_orders:
                 exchange_order_id = tracked_order.exchange_order_id
-                tasks.append(self.get_order(exchange_order_id))
+                if exchange_order_id != "":
+                    tasks.append(self.get_order(exchange_order_id))
             self.logger().debug(f"Polling for order status updates of {len(tasks)} orders.")
             update_results = await safe_gather(*tasks, return_exceptions=True)
             # todo alf: more work needed here ??
