@@ -292,9 +292,9 @@ class IdexExchange(ExchangeBase):
             if tracked_order is None:
                 raise ValueError(f"Failed to cancel order - {client_order_id}. Order not found.")
             exchange_order_id = await tracked_order.get_exchange_order_id()
-            cancelled_id = await self.delete_order(trading_pair, client_order_id)
-            format_cancelled_id = cancelled_id[0].get("orderId")
-            if exchange_order_id == format_cancelled_id:
+            cancelled_id_list = await self.delete_order(trading_pair, client_order_id)
+            cancelled_ids = [o["orderId"] for o in cancelled_id_list if o.get("orderId") is not None]
+            if exchange_order_id in cancelled_ids:
                 self.logger().info(f"Successfully cancelled order {client_order_id}.")
                 self.stop_tracking_order(client_order_id)
                 self.trigger_event(MarketEvent.OrderCancelled,
@@ -308,7 +308,7 @@ class IdexExchange(ExchangeBase):
                 # The order was never there to begin with. So cancelling it is a no-op but semantically successful.
                 self.logger().info(f"The order {client_order_id} does not exist on Idex. No cancellation needed.")
                 self.stop_tracking_order(client_order_id)
-                self.trigger_event(self.MARKET_ORDER_CANCELLED_EVENT_TAG,
+                self.trigger_event(self.MarketEvent.OrderCancelled,
                                    OrderCancelledEvent(self._current_timestamp, client_order_id))
                 return client_order_id
         except asyncio.CancelledError:
@@ -350,22 +350,22 @@ class IdexExchange(ExchangeBase):
                 data = await response.json()
                 return data
 
-    async def get_order(self, exchange_order_id: str) -> Dict[str, Any]:
-        """Requests order information through API with exchange orderId. Returns json data with order details"""
+    async def get_order(self, client_order_id: str) -> Dict[str, Any]:
+        """Requests order information through API with client order Id. Returns json data with order details"""
         async with get_throttler().weighted_task(request_weight=1):
             rest_url = get_idex_rest_url()
             url = f"{rest_url}/v1/orders"
             params = {
                 "nonce": self._idex_auth.generate_nonce(),
                 "wallet": self._idex_auth.get_wallet_address(),
-                "orderId": exchange_order_id
+                "orderId": f"client:{client_order_id}",
             }
             auth_dict = self._idex_auth.generate_auth_dict(http_method="GET", url=url, params=params)
             session: aiohttp.ClientSession = await self._http_client()
             async with session.get(auth_dict["url"], headers=auth_dict["headers"]) as response:
                 if response.status != 200:
                     if DEBUG:
-                        self.logger().error(f"<<<<< get_order(exchange_order_id:{exchange_order_id}) error {response}")
+                        self.logger().error(f"<<<<< get_order(client_order_id:{client_order_id}) error {response}")
                     data = await response.json()
                     raise IOError(f"Error fetching data from {url}, {auth_dict['url']}. HTTP status is {response.status}. {data}")
                 data = await response.json()
@@ -664,12 +664,12 @@ class IdexExchange(ExchangeBase):
         current_tick = int(self.current_timestamp / self.UPDATE_ORDER_STATUS_MIN_INTERVAL)
         if current_tick > last_tick and len(self._in_flight_orders) > 0:
             tracked_orders = list(self._in_flight_orders.values())
-            tasks = []
-            for tracked_order in tracked_orders:
-                order_id = await tracked_order.get_exchange_order_id()
-                tasks.append(self.get_order(order_id))
-            self.logger().debug(f"Polling for order status updates of {len(tasks)} orders.")
-            update_results = await safe_gather(*tasks, return_exceptions=True)
+            update_results = await self.list_orders()
+            # for tracked_order in tracked_orders:
+            #    client_order_id = tracked_order.client_order_id
+            #    tasks.append(self.get_order(client_order_id))
+            # self.logger().debug(f"Polling for order status updates of {len(tasks)} orders.")
+            # update_results = await safe_gather(*tasks, return_exceptions=True)
             # todo alf: more work needed here ??
             order_id_exception = [(o.client_order_id, r) for o, r in zip(tracked_orders, update_results)
                                   if isinstance(r, Exception)]
