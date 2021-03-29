@@ -292,9 +292,9 @@ class IdexExchange(ExchangeBase):
             if tracked_order is None:
                 raise ValueError(f"Failed to cancel order - {client_order_id}. Order not found.")
             exchange_order_id = await tracked_order.get_exchange_order_id()
-            cancelled_id = await self.delete_order(trading_pair, client_order_id)
-            format_cancelled_id = cancelled_id[0].get("orderId")
-            if exchange_order_id == format_cancelled_id:
+            cancelled_id_list = await self.delete_order(trading_pair, client_order_id)
+            cancelled_ids = [o["orderId"] for o in cancelled_id_list if o.get("orderId") is not None]
+            if exchange_order_id in cancelled_ids:
                 self.logger().info(f"Successfully cancelled order {client_order_id}.")
                 self.stop_tracking_order(client_order_id)
                 self.trigger_event(MarketEvent.OrderCancelled,
@@ -664,12 +664,12 @@ class IdexExchange(ExchangeBase):
         current_tick = int(self.current_timestamp / self.UPDATE_ORDER_STATUS_MIN_INTERVAL)
         if current_tick > last_tick and len(self._in_flight_orders) > 0:
             tracked_orders = list(self._in_flight_orders.values())
-            update_results = await self.list_orders()
-            # for tracked_order in tracked_orders:
-            #    client_order_id = tracked_order.client_order_id
-            #    tasks.append(self.get_order(client_order_id))
-            # self.logger().debug(f"Polling for order status updates of {len(tasks)} orders.")
-            # update_results = await safe_gather(*tasks, return_exceptions=True)
+            tasks = []
+            for tracked_order in tracked_orders:
+                client_order_id = tracked_order.client_order_id
+                tasks.append(self.get_order(client_order_id))
+            self.logger().debug(f"Polling for order status updates of {len(tasks)} orders.")
+            update_results = await safe_gather(*tasks, return_exceptions=True)
             # todo alf: more work needed here ??
             order_id_exception = [(o.client_order_id, r) for o, r in zip(tracked_orders, update_results)
                                   if isinstance(r, Exception)]
