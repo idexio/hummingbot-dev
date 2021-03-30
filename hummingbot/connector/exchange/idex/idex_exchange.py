@@ -287,6 +287,7 @@ class IdexExchange(ExchangeBase):
         :param order_id: The internal order id
         order.last_state to change to CANCELED
         """
+        self.logger().warning(f'entering _execute_cancel({trading_pair}, {client_order_id})')
         try:
             tracked_order = self._in_flight_orders.get(client_order_id)
             if tracked_order is None:
@@ -295,7 +296,7 @@ class IdexExchange(ExchangeBase):
             cancelled_id = await self.delete_order(trading_pair, client_order_id)
             if not cancelled_id:
                 if DEBUG:
-                    self.logger().warning(f'self.delete_order({trading_pair}, {client_order_id}) returned empty')
+                    self.logger().error(f'self.delete_order({trading_pair}, {client_order_id}) returned empty')
                 raise IOError(f"call to delete_order {client_order_id} returned empty: order not found")
             format_cancelled_id = (cancelled_id[0] or {}).get("orderId")
             if exchange_order_id == format_cancelled_id:
@@ -306,6 +307,8 @@ class IdexExchange(ExchangeBase):
                                        self.current_timestamp,
                                        client_order_id))
                 tracked_order.cancelled_event.set()
+                self.logger().warning(f'successfully exiting _execute_cancel for {client_order_id}, '
+                                      f'exchange_order_id: {exchange_order_id}')
                 return client_order_id
             else:
                 raise IOError(f"delete_order({client_order_id}) tracked with exchange id: {exchange_order_id} "
@@ -327,9 +330,11 @@ class IdexExchange(ExchangeBase):
             else:
                 self.logger().warning(f'About to re-raise exception in _execute_cancel: {str(e)}')
                 raise e
-        except asyncio.CancelledError:
-            raise
+        except asyncio.CancelledError as e:
+            self.logger().warning(f'_execute_cancel: About to re-raise CancelledError: {str(e)}')
+            raise e
         except Exception as e:
+            self.logger().exception(f'_execute_cancel raised unexpected exception: {e}. Details:')
             self.logger().network(
                 f"Failed to cancel order {client_order_id}: {str(e)}",
                 exc_info=True,
