@@ -91,6 +91,7 @@ class IdexExchange(ExchangeBase):
         self._trading_rules_polling_task = None
         self._last_poll_timestamp = 0
         self._exchange_info = None  # stores info about the exchange. Periodically polled from GET /v1/exchange
+        self._market_info = None    # stores info about the markets. Periodically polled from GET /v1/markets
         # self._throttler_public_endpoint = Throttler(rate_limit=(2, 1.0))  # rate_limit=(weight, t_period)
         # self._throttler_user_endpoint = Throttler(rate_limit=(3, 1.0))  # rate_limit=(weight, t_period)
         # self._throttler_trades_endpoint = Throttler(rate_limit=(4, 1.0))  # rate_limit=(weight, t_period)
@@ -256,13 +257,13 @@ class IdexExchange(ExchangeBase):
             except Exception as e:
                 self.logger().network(f"Unexpected error while fetching trading rules. Error: {str(e)}",
                                       exc_info=True,
-                                      app_warning_msg="Could not fetch new trading rules from Crypto.com. "
+                                      app_warning_msg="Could not fetch new trading rules from Idex. "
                                                       "Check network connection.")
                 await asyncio.sleep(0.5)
 
     async def _update_trading_rules(self):
-        exchange_info = await self.get_exchange_info_from_api()
-        market_info = await self.get_market_info_from_api()
+        exchange_info = self._exchange_info if self._exchange_info else await self.get_exchange_info_from_api()
+        market_info = self._market_info if self._market_info else await self.get_market_info_from_api()
         self._trading_rules.clear()
         self._trading_rules = self._format_trading_rules(exchange_info, market_info)
 
@@ -746,7 +747,8 @@ class IdexExchange(ExchangeBase):
                 await safe_gather(
                     self._update_balances(),
                     self._update_order_status(),
-                    self._update_exchange_info()
+                    self._update_exchange_info(),
+                    self._update_market_info()
                 )
             except asyncio.CancelledError:
                 raise
@@ -980,6 +982,11 @@ class IdexExchange(ExchangeBase):
     async def _update_exchange_info(self):
         """Call REST API to update basic exchange info"""
         self._exchange_info = await self.get_exchange_info_from_api()
+
+    @async_ttl_cache(ttl=60 * 10, maxsize=1)
+    async def _update_market_info(self):
+        """Call REST API to update basic exchange info"""
+        self._market_info = await self.get_market_info_from_api()
 
     async def _iter_user_event_queue(self) -> AsyncIterable[Dict[str, any]]:
         while True:
