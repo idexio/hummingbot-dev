@@ -390,7 +390,7 @@ class IdexExchange(ExchangeBase):
                         )
                         orders_resp = await self.list_orders()  # todo alf: to be removed
                         self.logger().warning(  # todo alf: to be removed
-                            f"<|<|<|<|< list_orders() error {response}. data: {orders_resp}")
+                            f"<|<|<|<|<calling list_orders() inside get_order() for additional info: {orders_resp}")
                     raise IOError(f"Error fetching data from {url}, {auth_dict['url']}. HTTP status is {response.status}. {data}")
                 data = await response.json()
                 return data
