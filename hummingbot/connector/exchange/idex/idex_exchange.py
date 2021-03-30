@@ -291,15 +291,15 @@ class IdexExchange(ExchangeBase):
             tracked_order = self._in_flight_orders.get(client_order_id)
             if tracked_order is None:
                 raise ValueError(f"Failed to cancel order - {client_order_id}. Order not found.")
-            exchange_order_id = await tracked_order.get_exchange_order_id()
+            exchange_order_id = tracked_order.exchange_order_id
             cancelled_id = await self.delete_order(trading_pair, client_order_id)
             if not cancelled_id:
                 if DEBUG:
                     self.logger().warning(f'self.delete_order({trading_pair}, {client_order_id}) returned empty')
-                raise IOError("call to delete_order returned empty: order not found")
+                raise IOError(f"call to delete_order {client_order_id} returned empty: order not found")
             format_cancelled_id = (cancelled_id[0] or {}).get("orderId")
             if exchange_order_id == format_cancelled_id:
-                self.logger().info(f"Successfully cancelled order {client_order_id}.")
+                self.logger().info(f"Successfully cancelled order:{client_order_id}. exchange id:{exchange_order_id}")
                 self.stop_tracking_order(client_order_id)
                 self.trigger_event(MarketEvent.OrderCancelled,
                                    OrderCancelledEvent(
@@ -307,15 +307,25 @@ class IdexExchange(ExchangeBase):
                                        client_order_id))
                 tracked_order.cancelled_event.set()
                 return client_order_id
+            else:
+                raise IOError(f"delete_order({client_order_id}) tracked with exchange id: {exchange_order_id} "
+                              f"returned a different order id {format_cancelled_id}: order not found")
         except IOError as e:
+            self.logger().exception(f"_execute_cancel error: order {client_order_id} does not exist on Idex. "
+                                    f"No cancellation performed:")
+            self.logger().network(
+                f"Failed to cancel not found order {client_order_id}: {str(e)}",
+                exc_info=True,
+                app_warning_msg=f"Failed to cancel the order {client_order_id} on Idex. "
+                                f"Order not found.")
             if "order not found" in str(e):
                 # The order was never there to begin with. So cancelling it is a no-op but semantically successful.
-                self.logger().info(f"The order {client_order_id} does not exist on Idex. No cancellation needed.")
                 self.stop_tracking_order(client_order_id)
                 self.trigger_event(self.MarketEvent.OrderCancelled,
                                    OrderCancelledEvent(self._current_timestamp, client_order_id))
                 return client_order_id
             else:
+                self.logger().warning(f'About to re-raise exception in _execute_cancel: {str(e)}')
                 raise e
         except asyncio.CancelledError:
             raise
