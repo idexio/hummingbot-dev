@@ -197,13 +197,11 @@ class IdexExchange(ExchangeBase):
         """
         super().stop(clock)
 
-    @staticmethod
     def get_order_price_quantum(self, trading_pair: str, price: Decimal) -> Decimal:
         """Provides the Idex standard minimum price increment across all trading pairs"""
         trading_rule = self._trading_rules[trading_pair]
         return trading_rule.min_price_increment
 
-    @staticmethod
     def get_order_size_quantum(self, trading_pair: str, order_size: Decimal) -> Decimal:
         """Provides the Idex standard minimum order increment across all trading pairs"""
         trading_rule = self._trading_rules[trading_pair]
