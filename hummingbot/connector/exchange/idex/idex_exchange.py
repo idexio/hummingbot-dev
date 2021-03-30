@@ -45,9 +45,9 @@ class IdexExchange(ExchangeBase):
 
     name: str = EXCHANGE_NAME
 
-    SHORT_POLL_INTERVAL = 5.0
+    SHORT_POLL_INTERVAL = 15.0
     LONG_POLL_INTERVAL = 120.0
-    UPDATE_ORDER_STATUS_MIN_INTERVAL = 10.0
+    UPDATE_ORDER_STATUS_MIN_INTERVAL = 90.0
 
     @classmethod
     def logger(cls) -> HummingbotLogger:
@@ -379,15 +379,18 @@ class IdexExchange(ExchangeBase):
                     raise IOError(f"call to delete_order {client_order_id} returned empty: order not found")
                 format_cancelled_id = (cancelled_id[0] or {}).get("orderId")
                 if exchange_order_id == format_cancelled_id:
-                    self.logger().info(f"Successfully cancelled order:{client_order_id}. exchange id:{exchange_order_id}")
+                    self.logger().info(f"Successfully cancelled order:{client_order_id}. "
+                                       f"exchange id:{exchange_order_id}")
                     self.stop_tracking_order(client_order_id)
                     self.trigger_event(MarketEvent.OrderCancelled,
                                        OrderCancelledEvent(
                                            self.current_timestamp,
-                                           client_order_id))
+                                           client_order_id,
+                                           tracked_order.exchange_order_id))
                     tracked_order.cancelled_event.set()
-                    self.logger().warning(f'successfully exiting _execute_cancel for {client_order_id}, '
-                                          f'exchange_order_id: {exchange_order_id}')
+                    if DEBUG:
+                        self.logger().warning(f'successfully exiting _execute_cancel for {client_order_id}, '
+                                              f'exchange_order_id: {exchange_order_id}')
                     return client_order_id
                 else:
                     raise IOError(f"delete_order({client_order_id}) tracked with exchange id: {exchange_order_id} "
@@ -404,7 +407,10 @@ class IdexExchange(ExchangeBase):
                     # The order was never there to begin with. So cancelling it is a no-op but semantically successful.
                     self.stop_tracking_order(client_order_id)
                     self.trigger_event(MarketEvent.OrderCancelled,
-                                       OrderCancelledEvent(self.current_timestamp, client_order_id))
+                                       OrderCancelledEvent(
+                                           self.current_timestamp,
+                                           client_order_id,
+                                           tracked_order.exchange_order_id))
                     return client_order_id
                 else:
                     self.logger().warning(f'About to re-raise exception in _execute_cancel: {str(e)}')
@@ -612,7 +618,7 @@ class IdexExchange(ExchangeBase):
 
     async def _create_order(self,
                             trade_type: TradeType,
-                            order_id: str,
+                            client_order_id: str,
                             trading_pair: str,
                             amount: Decimal,
                             order_type: OrderType,
@@ -620,7 +626,7 @@ class IdexExchange(ExchangeBase):
         """
         Calls create-order API end point to place an order, starts tracking the order and triggers order created event.
         :param trade_type: BUY or SELL
-        :param order_id: Internal order id (also called client_order_id)
+        :param client_order_id: Internal order id (also called client_order_id)
         :param trading_pair: The market to place order
         :param amount: The order amount (in base token value)
         :param order_type: The order type (MARKET, LIMIT, etc..)
@@ -648,25 +654,25 @@ class IdexExchange(ExchangeBase):
                 "side": idex_trade_param,
                 "quantity": f"{amount:f}",
                 "price": f"{price:f}",
-                "clientOrderId": order_id,
+                "clientOrderId": client_order_id,
                 "timeInForce": "gtc",
                 "selfTradePrevention": "dc"
             }
 
             try:
                 order_result = await self.post_order(api_params)
-                self.start_tracking_order(order_id,
-                                          order_result["orderId"],
+                exchange_order_id = order_result.get("orderId")
+                self.start_tracking_order(client_order_id,
+                                          exchange_order_id,
                                           trading_pair,
                                           trade_type,
                                           price,
                                           amount,
                                           order_type
                                           )
-                exchange_order_id = order_result["orderId"]
-                tracked_order = self._in_flight_orders.get(order_id)
+                tracked_order = self._in_flight_orders.get(client_order_id)
                 if DEBUG:
-                    self.logger().info(f"Created {order_type.name} {trade_type.name} order {order_id} for "
+                    self.logger().info(f"Created {order_type.name} {trade_type.name} order {client_order_id} for "
                                        f"{amount} {trading_pair}.")
                 tracked_order.update_exchange_order_id(exchange_order_id)
                 event_tag = MarketEvent.BuyOrderCreated if trade_type is TradeType.BUY else MarketEvent.SellOrderCreated
@@ -678,8 +684,8 @@ class IdexExchange(ExchangeBase):
                                        trading_pair,
                                        amount,
                                        price,
-                                       order_id
-                                   ))
+                                       client_order_id,
+                                       exchange_order_id))
             except asyncio.CancelledError as e:
                 if DEBUG:
                     self.logger().exception("_create_order received a CancelledError...")
@@ -687,7 +693,7 @@ class IdexExchange(ExchangeBase):
             except Exception as e:
                 if DEBUG:
                     self.logger().exception(f"_create_order received an exception {e}. Details: ")
-                self.stop_tracking_order(order_id)
+                self.stop_tracking_order(client_order_id)
                 self.logger().network(
                     f"Error submitting {trade_type.name} {order_type.name} order to Idex for "
                     f"{amount} {trading_pair} "
@@ -696,7 +702,7 @@ class IdexExchange(ExchangeBase):
                     app_warning_msg=str(e)
                 )
                 self.trigger_event(MarketEvent.OrderFailure, MarketOrderFailureEvent(
-                    self.current_timestamp, order_id, order_type))
+                    self.current_timestamp, client_order_id, order_type))
 
     def start_tracking_order(self,
                              order_id: str,
@@ -837,7 +843,8 @@ class IdexExchange(ExchangeBase):
             self.trigger_event(MarketEvent.OrderCancelled,
                                OrderCancelledEvent(
                                    self.current_timestamp,
-                                   client_order_id))
+                                   client_order_id,
+                                   tracked_order.exchange_order_id))
             tracked_order.cancelled_event.set()
             self.logger().info(f"The order {client_order_id} is no longer tracked!")
             self.stop_tracking_order(client_order_id)
@@ -902,7 +909,8 @@ class IdexExchange(ExchangeBase):
                                            tracked_order.executed_amount_base,
                                            tracked_order.executed_amount_quote,
                                            tracked_order.fee_paid,
-                                           tracked_order.order_type))
+                                           tracked_order.order_type,
+                                           tracked_order.exchange_order_id))
             self.stop_tracking_order(tracked_order.client_order_id)
 
     async def cancel_all(self, timeout_seconds: float):
@@ -930,18 +938,36 @@ class IdexExchange(ExchangeBase):
                             continue
                         order_id_set.remove(incomplete_order.client_order_id)
                         successful_cancellations.append(CancellationResult(incomplete_order.client_order_id, True))
+                        # todo alf: should we emit event here ?
+                        format_cancelled_id = (result[0] or {}).get("orderId")
+                        if incomplete_order.exchange_order_id == format_cancelled_id:
+                            self.stop_tracking_order(incomplete_order.client_order_id)
+                            self.trigger_event(MarketEvent.OrderCancelled,
+                                               OrderCancelledEvent(
+                                                   self.current_timestamp,
+                                                   incomplete_order.client_order_id,
+                                                   incomplete_order.exchange_order_id))
+                            incomplete_order.cancelled_event.set()
+                            self.logger().info(
+                                f"cancel_all: Successfully cancelled order:{incomplete_order.client_order_id}. "
+                                f"exchange id:{incomplete_order.exchange_order_id}")
+                        else:
+                            self.logger().error(
+                                f"cancel_all: delete_order({incomplete_order.client_order_id}) "
+                                f"tracked with exchange id: {incomplete_order.exchange_order_id} "
+                                f"returned a different order id {format_cancelled_id}: order not found")
             except asyncio.CancelledError as e:
                 if DEBUG:
                     self.logger().exception(f"cancel_all got async Cancellation error {e}. Details: ")
                 raise e
             except Exception as e:
+                if DEBUG:
+                    self.logger().exception(f"cancel_all got unexpected Exception error {e}. Details: ")
                 self.logger().network(
                     f"Unexpected error cancelling orders. Error: {str(e)}",
                     exc_info=True,
                     app_warning_msg="Failed to cancel order on Idex. Check API key and network connection."
                 )
-            # todo alf: what is the point of keeping failed_cancellations and successful_cancellations lists ?
-            #  ... are we not supposed to send Hummingbot events for these ?
             failed_cancellations = [CancellationResult(oid, False) for oid in order_id_set]
             return successful_cancellations + failed_cancellations
 
