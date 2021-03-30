@@ -275,7 +275,7 @@ class IdexExchange(ExchangeBase):
         :param trading_pair: The market (e.g. BTC-USDT) of the order.
         :param client_order_id: The internal order id
         """
-
+        self.logger().info("Cancellation has been called for")
         order_cancellation = safe_ensure_future(self._execute_cancel(trading_pair, client_order_id))
         return order_cancellation
 
@@ -292,7 +292,9 @@ class IdexExchange(ExchangeBase):
             if tracked_order is None:
                 raise ValueError(f"Failed to cancel order - {client_order_id}. Order not found.")
             exchange_order_id = tracked_order.exchange_order_id
+            self.logger().info(f"This is the exchange ID of the order to be cancelled: {exchange_order_id}")
             cancelled_id = await self.delete_order(trading_pair, client_order_id)
+            self.logger().info(f"This is the cancelled ID returned from IDEX: {cancelled_id}")
             if cancelled_id:
                 if exchange_order_id == cancelled_id[0].get("orderId"):
                     self.logger().info(f"Successfully cancelled order {client_order_id}.")
@@ -452,8 +454,8 @@ class IdexExchange(ExchangeBase):
 
             auth_dict = self._idex_auth.generate_auth_dict_for_delete(url=url, body=body, wallet_signature=wallet_signature)
             session: aiohttp.ClientSession = await self._http_client()
-            if DEBUG:
-                self.logger().info(f"Cancelling order {client_order_id} for {trading_pair}.")
+            # if DEBUG:
+            self.logger().info(f"Cancelling order {client_order_id} for {trading_pair}.")
             async with session.delete(auth_dict["url"], data=auth_dict["body"], headers=auth_dict["headers"]) as response:
                 if response.status != 200:
                     data = await response.json()
