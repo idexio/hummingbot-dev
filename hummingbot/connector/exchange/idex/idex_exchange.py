@@ -321,7 +321,7 @@ class IdexExchange(ExchangeBase):
             if "order not found" in str(e):
                 # The order was never there to begin with. So cancelling it is a no-op but semantically successful.
                 self.stop_tracking_order(client_order_id)
-                self.trigger_event(self.MarketEvent.OrderCancelled,
+                self.trigger_event(MarketEvent.OrderCancelled,
                                    OrderCancelledEvent(self._current_timestamp, client_order_id))
                 return client_order_id
             else:
