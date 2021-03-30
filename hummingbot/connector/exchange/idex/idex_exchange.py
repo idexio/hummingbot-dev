@@ -939,23 +939,29 @@ class IdexExchange(ExchangeBase):
                         order_id_set.remove(incomplete_order.client_order_id)
                         successful_cancellations.append(CancellationResult(incomplete_order.client_order_id, True))
                         # todo alf: should we emit event here ?
-                        format_cancelled_id = (result[0] or {}).get("orderId")
-                        if incomplete_order.exchange_order_id == format_cancelled_id:
-                            self.stop_tracking_order(incomplete_order.client_order_id)
-                            self.trigger_event(MarketEvent.OrderCancelled,
-                                               OrderCancelledEvent(
-                                                   self.current_timestamp,
-                                                   incomplete_order.client_order_id,
-                                                   incomplete_order.exchange_order_id))
-                            incomplete_order.cancelled_event.set()
-                            self.logger().info(
-                                f"cancel_all: Successfully cancelled order:{incomplete_order.client_order_id}. "
-                                f"exchange id:{incomplete_order.exchange_order_id}")
+                        if not result:
+                            self.logger().error(
+                                f'cancel_all: self.delete_order({incomplete_order.trading_pair}, '
+                                f'{incomplete_order.client_order_id}) returned empty response: order not found')
+                            response_order_id = '--no-value--'
                         else:
+                            response_order_id = (result[0] or {}).get("orderId")
+                        if incomplete_order.exchange_order_id != response_order_id:
                             self.logger().error(
                                 f"cancel_all: delete_order({incomplete_order.client_order_id}) "
                                 f"tracked with exchange id: {incomplete_order.exchange_order_id} "
-                                f"returned a different order id {format_cancelled_id}: order not found")
+                                f"returned a different order id {response_order_id}: order not found")
+                        # let's stop tracking the order whether we failed or not
+                        self.stop_tracking_order(incomplete_order.client_order_id)
+                        self.trigger_event(MarketEvent.OrderCancelled,
+                                           OrderCancelledEvent(
+                                               self.current_timestamp,
+                                               incomplete_order.client_order_id,
+                                               incomplete_order.exchange_order_id))
+                        incomplete_order.cancelled_event.set()
+                        self.logger().info(
+                            f"cancel_all: finished processing cancel of order:{incomplete_order.client_order_id}. "
+                            f"exchange id:{incomplete_order.exchange_order_id}")
             except asyncio.CancelledError as e:
                 if DEBUG:
                     self.logger().exception(f"cancel_all got async Cancellation error {e}. Details: ")
