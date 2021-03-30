@@ -530,17 +530,25 @@ class IdexExchange(ExchangeBase):
             "selfTradePrevention": "dc"
         }
 
-        self.start_tracking_order(order_id,
-                                  "",
-                                  trading_pair,
-                                  trade_type,
-                                  price,
-                                  amount,
-                                  order_type
-                                  )
+        # self.start_tracking_order(order_id,
+        #                          "",
+        #                          trading_pair,
+        #                          trade_type,
+        #                          price,
+        #                          amount,
+        #                          order_type
+        #                          )
         try:
             order_result = await self.post_order(api_params)
             exchange_order_id = order_result["orderId"]
+            self.start_tracking_order(order_id,
+                                      exchange_order_id,
+                                      trading_pair,
+                                      trade_type,
+                                      price,
+                                      amount,
+                                      order_type
+                                      )
             tracked_order = self._in_flight_orders.get(order_id)
             if tracked_order is not None:
                 if DEBUG:
