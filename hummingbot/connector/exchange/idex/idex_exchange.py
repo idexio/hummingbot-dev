@@ -303,7 +303,7 @@ class IdexExchange(ExchangeBase):
         rules = {}
         price_step = Decimal(str(0.00000001))
         quantity_step = Decimal(str(0.00000001))
-        minimum_order_size = exchange_info["makerTradeMinimum"]
+        minimum_order_size = Decimal(str(exchange_info["makerTradeMinimum"]))
         for t_pair in market_info:
             trading_pair = t_pair["market"]
             try:
@@ -403,7 +403,7 @@ class IdexExchange(ExchangeBase):
                     # The order was never there to begin with. So cancelling it is a no-op but semantically successful.
                     self.stop_tracking_order(client_order_id)
                     self.trigger_event(MarketEvent.OrderCancelled,
-                                       OrderCancelledEvent(self._current_timestamp, client_order_id))
+                                       OrderCancelledEvent(self.current_timestamp, client_order_id))
                     return client_order_id
                 else:
                     self.logger().warning(f'About to re-raise exception in _execute_cancel: {str(e)}')
