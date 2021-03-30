@@ -451,7 +451,7 @@ class IdexExchange(ExchangeBase):
                 return data
 
     async def get_order(self, exchange_order_id: str) -> Dict[str, Any]:
-        """Requests order information through API with client order Id. Returns json data with order details"""
+        """Requests order information through API with exchange order Id. Returns json data with order details"""
         async with get_throttler().weighted_task(request_weight=1):
             if DEBUG:
                 self.logger().warning(f'<|<|<|<|< entering get_order({exchange_order_id})')
