@@ -448,10 +448,10 @@ class IdexExchange(ExchangeBase):
             session: aiohttp.ClientSession = await self._http_client()
             async with session.post(auth_dict["url"], data=auth_dict["body"], headers=auth_dict["headers"]) as response:
                 if response.status != 200:
-                    if DEBUG:
-                        self.logger().warning(f'failed post_order response: {response}')
                     data = await response.json()
-                    raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}."
+                    if DEBUG:
+                        self.logger().warning(f'failed post_order. Response data: {data}')
+                    raise IOError(f"Error posting data to {url}. HTTP status is {response.status}."
                                   f"Data is: {data}")
                 data = await response.json()
                 if DEBUG:
@@ -538,33 +538,35 @@ class IdexExchange(ExchangeBase):
         :param order_type: The order type (MARKET, LIMIT, etc..)
         :param price: The order price
         """
+        async with self._order_lock:
 
-        if not order_type.is_limit_type():
-            raise Exception(f"Unsupported order type: {order_type}")
-        # trading_rule = self._trading_rules[trading_pair]  # No trading rules applied at this time
+            if not order_type.is_limit_type():
+                raise Exception(f"Unsupported order type: {order_type}")
+            # trading_rule = self._trading_rules[trading_pair]  # No trading rules applied at this time
 
-        idex_order_param = hb_order_type_to_idex_param(order_type)
-        idex_trade_param = hb_trade_type_to_idex_param(trade_type)
+            idex_order_param = hb_order_type_to_idex_param(order_type)
+            idex_trade_param = hb_trade_type_to_idex_param(trade_type)
 
-        amount = self.quantize_order_amount(trading_pair, amount)
-        price = self.quantize_order_price(trading_pair, price)
-        # if amount < trading_rule.min_order_size:       # No trading rules applied at this time
-        #    raise ValueError(f"Buy order amount {amount} is lower than the minimum order size "
-        #                     f"{trading_rule.min_order_size}.")
+            amount = self.quantize_order_amount(trading_pair, amount)
+            price = self.quantize_order_price(trading_pair, price)
 
-        api_params = {
-            "market": trading_pair,
-            "type": idex_order_param,
-            "side": idex_trade_param,
-            "quantity": f"{amount:f}",
-            "price": f"{price:f}",
-            "clientOrderId": order_id,
-            "timeInForce": "gtc",
-            "selfTradePrevention": "dc"
-        }
+            # todo alf: time to revise this
+            # if amount < trading_rule.min_order_size:       # No trading rules applied at this time
+            #    raise ValueError(f"Buy order amount {amount} is lower than the minimum order size "
+            #                     f"{trading_rule.min_order_size}.")
 
-        try:
-            async with self._order_lock:
+            api_params = {
+                "market": trading_pair,
+                "type": idex_order_param,
+                "side": idex_trade_param,
+                "quantity": f"{amount:f}",
+                "price": f"{price:f}",
+                "clientOrderId": order_id,
+                "timeInForce": "gtc",
+                "selfTradePrevention": "dc"
+            }
+
+            try:
                 order_result = await self.post_order(api_params)
                 self.start_tracking_order(order_id,
                                           order_result["orderId"],
@@ -591,21 +593,23 @@ class IdexExchange(ExchangeBase):
                                        price,
                                        order_id
                                    ))
-        except asyncio.CancelledError as e:
-            if DEBUG:
-                self.logger().exception("_create_order received a CancelledError...")
-            raise e
-        except Exception as e:
-            self.stop_tracking_order(order_id)
-            self.logger().network(
-                f"Error submitting {trade_type.name} {order_type.name} order to Idex for "
-                f"{amount} {trading_pair} "
-                f"{price}.",
-                exc_info=True,
-                app_warning_msg=str(e)
-            )
-            self.trigger_event(MarketEvent.OrderFailure, MarketOrderFailureEvent(
-                self.current_timestamp, order_id, order_type))
+            except asyncio.CancelledError as e:
+                if DEBUG:
+                    self.logger().exception("_create_order received a CancelledError...")
+                raise e
+            except Exception as e:
+                if DEBUG:
+                    self.logger().exception(f"_create_order received an exception {e}. Details: ")
+                self.stop_tracking_order(order_id)
+                self.logger().network(
+                    f"Error submitting {trade_type.name} {order_type.name} order to Idex for "
+                    f"{amount} {trading_pair} "
+                    f"{price}.",
+                    exc_info=True,
+                    app_warning_msg=str(e)
+                )
+                self.trigger_event(MarketEvent.OrderFailure, MarketOrderFailureEvent(
+                    self.current_timestamp, order_id, order_type))
 
     def start_tracking_order(self,
                              order_id: str,
