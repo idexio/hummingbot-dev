@@ -819,10 +819,14 @@ class IdexExchange(ExchangeBase):
                         self.logger().error(f"exception in _update_order_status get_order subtask: {result}")
                         # remove failed order from tracked_orders
                         self.stop_tracking_order(tracked_order.client_order_id)
-                        self.logger().error(f'Stopped tracking order: {tracked_order.client_order_id} wth failed get_order')
+                        self.logger().error(f'Stopped tracking not found order: {tracked_order.client_order_id}')
                         self.trigger_event(MarketEvent.OrderFailure, MarketOrderFailureEvent(
                             self.current_timestamp, tracked_order.client_order_id, tracked_order.order_type))
                         continue
+                    if DEBUG:
+                        self.logger().warning(
+                            '_update_order_status is about to call _process_fill_message and _process_order_message '
+                            f'for get_order() response: {result}')
                     await self._process_fill_message(result)
                     self._process_order_message(result)
 
@@ -921,6 +925,8 @@ class IdexExchange(ExchangeBase):
         :returns List of CancellationResult which indicates whether each order is successfully cancelled.
         """
         async with self._order_lock:
+            if DEBUG:
+                self.logger().warning('<<<< entering cancel_all')
             incomplete_orders = [o for o in self._in_flight_orders.values() if not o.is_done]
             tasks = [self.delete_order(o.trading_pair, o.client_order_id) for o in incomplete_orders]
             order_id_set = set([o.client_order_id for o in incomplete_orders])
