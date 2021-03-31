@@ -40,6 +40,8 @@ from hummingbot.logger import HummingbotLogger
 s_decimal_0 = Decimal("0.0")
 ie_logger = None
 
+NORMALIZED_PRECISION = 1e-08  # see Numbers & Precision at: https://docs.idex.io/#data-types
+
 
 class IdexExchange(ExchangeBase):
 
@@ -302,8 +304,8 @@ class IdexExchange(ExchangeBase):
         ]
         """
         rules = {}
-        price_step = Decimal(str(0.00000001))
-        quantity_step = Decimal(str(0.00000001))
+        price_step = Decimal(str(NORMALIZED_PRECISION))
+        quantity_step = Decimal(str(NORMALIZED_PRECISION))
         minimum_order_size = Decimal(str(exchange_info["makerTradeMinimum"]))
         for t_pair in market_info:
             trading_pair = t_pair["market"]
@@ -894,7 +896,7 @@ class IdexExchange(ExchangeBase):
                         exchange_trade_id=update_msg["i"] if "i" in update_msg else update_msg.get("orderId")
                     )
                 )
-        if math.isclose(tracked_order.executed_amount_base, tracked_order.amount, rel_tol=1e-08) or \
+        if math.isclose(tracked_order.executed_amount_base, tracked_order.amount, rel_tol=NORMALIZED_PRECISION) or \
                 tracked_order.executed_amount_base >= tracked_order.amount:
             tracked_order.last_state = "filled"
             self.logger().info(f"The {tracked_order.trade_type.name} order "
