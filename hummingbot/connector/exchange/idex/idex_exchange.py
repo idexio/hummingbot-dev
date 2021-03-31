@@ -985,7 +985,7 @@ class IdexExchange(ExchangeBase):
 
     @async_ttl_cache(ttl=60 * 10, maxsize=1)
     async def _update_market_info(self):
-        """Call REST API to update basic exchange info"""
+        """Call REST API to update basic market info"""
         self._market_info = await self.get_market_info_from_api()
 
     async def _iter_user_event_queue(self) -> AsyncIterable[Dict[str, any]]:
