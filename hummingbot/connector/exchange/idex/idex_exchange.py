@@ -654,8 +654,8 @@ class IdexExchange(ExchangeBase):
                 "market": trading_pair,
                 "type": idex_order_param,
                 "side": idex_trade_param,
-                "quantity": str(float(amount)),
-                "price": str(float(price)),
+                "quantity": f'{amount:.8f}',
+                "price": f'{price:.8f}',
                 "clientOrderId": client_order_id,
                 "timeInForce": "gtc",
                 "selfTradePrevention": "dc"
