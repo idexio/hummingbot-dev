@@ -652,8 +652,8 @@ class IdexExchange(ExchangeBase):
                 "market": trading_pair,
                 "type": idex_order_param,
                 "side": idex_trade_param,
-                "quantity": f"{amount:f}",
-                "price": f"{price:f}",
+                "quantity": str(float(amount)),
+                "price": str(float(price)),
                 "clientOrderId": client_order_id,
                 "timeInForce": "gtc",
                 "selfTradePrevention": "dc"
@@ -894,7 +894,7 @@ class IdexExchange(ExchangeBase):
                         exchange_trade_id=update_msg["i"] if "i" in update_msg else update_msg.get("orderId")
                     )
                 )
-        if math.isclose(tracked_order.executed_amount_base, tracked_order.amount) or \
+        if math.isclose(tracked_order.executed_amount_base, tracked_order.amount, rel_tol=1e-08) or \
                 tracked_order.executed_amount_base >= tracked_order.amount:
             tracked_order.last_state = "filled"
             self.logger().info(f"The {tracked_order.trade_type.name} order "
