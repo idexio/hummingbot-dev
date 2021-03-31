@@ -600,7 +600,7 @@ class IdexExchange(ExchangeBase):
                 return await response.json()
 
     async def get_market_info_from_api(self) -> List[Dict]:
-        """Requests basic info about idex exchange. We are mostly interested in the gas price in gwei"""
+        """Requests all markets (trading pairs) available to Idex users."""
         async with get_throttler().weighted_task(request_weight=1):
             rest_url = get_idex_rest_url()
             url = f"{rest_url}/v1/markets"
