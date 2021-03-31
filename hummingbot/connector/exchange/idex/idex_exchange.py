@@ -45,9 +45,9 @@ class IdexExchange(ExchangeBase):
 
     name: str = EXCHANGE_NAME
 
-    SHORT_POLL_INTERVAL = 15.0
+    SHORT_POLL_INTERVAL = 11.0
     LONG_POLL_INTERVAL = 120.0
-    UPDATE_ORDER_STATUS_MIN_INTERVAL = 90.0
+    UPDATE_ORDER_STATUS_MIN_INTERVAL = 45.0
 
     @classmethod
     def logger(cls) -> HummingbotLogger:
