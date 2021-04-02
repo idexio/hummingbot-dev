@@ -127,7 +127,7 @@ def main():
         "attrs",
         "certifi",
         "chardet",
-        "cython==0.29.21",
+        "cython==0.29.15",
         "idna",
         "idna_ssl",
         "multidict",
